@@ -1,0 +1,31 @@
+[Unit]
+Description=LowPan Shells (Quickshell no lugar do plasmashell)
+Documentation=https://github.com/LowPam/lowpan-shells
+After=plasma-ksmserver.service plasma-kwin_wayland.service
+PartOf=graphical-session.target
+StartLimitIntervalSec=60s
+StartLimitBurst=3
+
+[Service]
+# Papel de parede em vídeo: o /etc/environment força QT_MEDIA_BACKEND=gstreamer, que aqui decodifica na CPU
+# (sem gst-plugin-va). Só para o shell, o backend FFmpeg do Qt usa VA-API (RX 7600).
+Environment=QT_MEDIA_BACKEND=ffmpeg
+# Marcador de sessão do login (§21.72): com sessão "plasma" o LowPan não sobe sozinho.
+# (caminho via link ~/.config/quickshell/lowpan-shells -> <projeto>/shell, sem amarrar a pasta do projeto)
+ExecCondition="%h/.config/quickshell/lowpan-shells/../system/lowpan-sessao-e" iris
+ExecStart=/usr/bin/qs -c lowpan-shells
+# Um processo auxiliar morto por falta de memória (ex.: miniaturas) não derruba o shell inteiro.
+OOMPolicy=continue
+# ImageMagick do shell com política própria (shell/config/imagemagick/policy.xml): proibido abrir vídeo (decodifica
+# o arquivo inteiro: 4K = ~10 GB, OOM em 2026-11-05) e com tetos de memória/disco/tempo. Só vale para o shell.
+Environment=MAGICK_CONFIGURE_PATH=%h/.config/quickshell/lowpan-shells/config/imagemagick
+# O qs é ligado ao jemalloc: no padrão (4 arenas por núcleo = 64, sem thread de fundo) arena ociosa nunca devolve
+# memória liberada e o shell segurava ~500 MB à toa. Com thread de fundo e 4 arenas: 926 → 410 MB anônima (§21.76).
+Environment=MALLOC_CONF=background_thread:true,narenas:4
+Restart=on-failure
+RestartSec=2
+Slice=session.slice
+TimeoutStopSec=10
+
+[Install]
+WantedBy=plasma-core.target

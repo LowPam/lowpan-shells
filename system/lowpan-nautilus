@@ -1,0 +1,26 @@
+#!/bin/sh
+# LowPan Shells — abre o Nautilus com o tema LowPanNautilus só no LowPan (perfil de tema "own"); no Plasma,
+# o Nautilus segue o tema GTK global. Usado pelo serviço D-Bus e pelo .desktop do Nautilus em ~/.local/share
+# (§19.2 linha 34), para que qualquer abertura (lançador, D-Bus, "abrir pasta" de outro programa) pegue o tema.
+# O tema vale por processo: se o Nautilus já estiver rodando, as novas janelas usam o tema dele (nautilus -q).
+live="${XDG_STATE_HOME:-$HOME/.local/state}/lowpan-shells/theme-profile-live"
+if [ "$(cat "$live" 2>/dev/null)" = "own" ] && [ -d "$HOME/.themes/LowPanNautilus" ]; then
+    export GTK_THEME=LowPanNautilus
+fi
+# Pasta inicial: aberto sem pasta (menu, dock, nova janela), abre a pasta escrita na 1ª linha de
+# ~/.config/lowpan-shells/nautilus-inicio; sem o arquivo, a pasta pessoal (o normal do Nautilus). Com pasta (abrir pasta
+# de outro programa) ou como serviço D-Bus, nada muda. (2026-11-12; desde 2026-11-21 por usuário: o /mnt/LowPan fixo
+# abria na conta de teste também — é desta máquina.)
+inicio="$(head -n1 "${XDG_CONFIG_HOME:-$HOME/.config}/lowpan-shells/nautilus-inicio" 2>/dev/null)"
+tem_pasta=0
+for a in "$@"; do
+    case "$a" in
+        --gapplication-service) tem_pasta=1 ;;
+        -*) ;;
+        *) tem_pasta=1 ;;
+    esac
+done
+if [ "$tem_pasta" = 0 ] && [ -n "$inicio" ] && [ -d "$inicio" ]; then
+    set -- "$@" "$inicio"
+fi
+exec /usr/bin/nautilus "$@"

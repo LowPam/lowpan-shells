@@ -1,0 +1,13 @@
+# LowPan Shells — avisa quando um efeito do KWin do AUR ficou compilado para outra versão do kwin
+# (cantos arredondados/contorno de foco somem depois de atualizar o kwin). Lógica: system/lowpan-efeitos-kwin.
+[Unit]
+Description=LowPan Shells: efeitos do KWin a recompilar
+After=plasma-workspace.target
+
+[Service]
+Type=simple
+# --esperar: aguarda o pacman soltar o banco (o .path dispara no meio da atualização).
+ExecStart=%h/.local/bin/lowpan-efeitos-kwin --esperar
+
+[Install]
+WantedBy=plasma-workspace.target

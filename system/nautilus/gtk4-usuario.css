@@ -1,0 +1,32 @@
+@import 'colors.css';
+/* LowPan Shells (§19.2 linha 32), só no perfil "own" (LowPan): o Nautilus 51 traz CSS próprio com prioridade de
+   aplicativo (caminho com cantos de 9 px), que o tema não consegue vencer; só o CSS do usuário passa por cima.
+   Caminho e busca em pílula (2026-11-12). */
+.nautilus-pathbar,
+.nautilus-pathbar > scrolledwindow,
+.nautilus-pathbar > scrolledwindow > viewport,
+.nautilus-query-editor {
+  border-radius: 9999px;
+}
+.nautilus-pathbar > scrolledwindow:dir(ltr) undershoot.left { border-radius: 9999px 0 0 9999px; }
+.nautilus-pathbar > scrolledwindow:dir(rtl) undershoot.right { border-radius: 0 9999px 9999px 0; }
+.nautilus-path-button { border-radius: 9999px; }
+
+/* Lateral sem o botão "Desmontar" (2026-11-12): o GTK4 não tem display:none, então ele fica invisível e sem
+   tamanho. Desmontar continua no menu do botão direito. */
+.nautilus-window row button.sidebar-button {
+  opacity: 0;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  -gtk-icon-size: 0;
+}
+/* Miniaturas sem o xadrez de transparência (2026-11-15): o Nautilus 51 pinta checkerboard.png atrás de toda
+   miniatura (.nautilus-image.file-thumbnail); aqui fica como no Dolphin, sem fundo e sem a moldura. */
+.nautilus-image.file-thumbnail {
+  background: none;
+  box-shadow: none;
+}

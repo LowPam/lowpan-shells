@@ -1,0 +1,12 @@
+# /pkg/ é versionado no LowPan Shells: a instalação só copia o motor compilado (2026-11-21)
+/node_modules/
+/builds/
+/.idea/
+/.task/
+
+/TODO.md
+/krohnkite.js
+
+/*.qml
+*.kwinscript
+*.bak

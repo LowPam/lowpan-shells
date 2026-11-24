@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+# LowPan Shells: mapa "nome do ícone → arquivo" de um tema de ícones (com a herança e o hicolor), para o
+# shell mostrar os ícones do tema da família sem depender do tema do Qt — que o processo lê ao iniciar e
+# não troca de forma confiável depois (§21.54). Usado por scripts/lowpan-theme-profile depois de cada troca.
+#
+# Uso: lowpan-icon-map TEMA SAIDA.json
+# Preferência (por tema, na ordem da herança): Scalable > maior tamanho; escala 1 antes de @2x.
+import configparser
+import json
+import os
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+EXTS = (".svg", ".png")
+
+
+def bases():
+    data_home = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
+    dirs = [HOME / ".icons", data_home / "icons"]
+    for d in os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":"):
+        if d:
+            dirs.append(Path(d) / "icons")
+    out = []
+    for d in dirs:
+        if d not in out:
+            out.append(d)
+    return out
+
+
+def theme_dirs(name):
+    return [b / name for b in bases() if (b / name / "index.theme").is_file() or (b / name).is_dir()]
+
+
+def read_index(name):
+    for d in theme_dirs(name):
+        idx = d / "index.theme"
+        if idx.is_file():
+            cp = configparser.ConfigParser(interpolation=None, strict=False)
+            cp.optionxform = str
+            try:
+                cp.read(idx, encoding="utf-8")
+            except (configparser.Error, UnicodeDecodeError):
+                continue
+            return cp
+    return None
+
+
+def chain(name):
+    order, todo = [], [name]
+    while todo:
+        t = todo.pop(0)
+        if t in order:
+            continue
+        cp = read_index(t)
+        if cp is None:
+            continue
+        order.append(t)
+        inherits = cp.get("Icon Theme", "Inherits", fallback="")
+        todo[0:0] = [x.strip() for x in inherits.split(",") if x.strip()]
+    if "hicolor" not in order and read_index("hicolor"):
+        order.append("hicolor")
+    return order
+
+
+def rank(cp, sub):
+    sec = cp[sub] if cp.has_section(sub) else {}
+    typ = sec.get("Type", "Threshold")
+    size = int(sec.get("Size", "0") or 0)
+    scale = int(sec.get("Scale", "1") or 1)
+    # menor é melhor
+    return (0 if scale == 1 else 1, 0 if typ == "Scalable" else 1, -size)
+
+
+def build(theme):
+    icons = {}
+    for t in chain(theme):
+        cp = read_index(t)
+        subs = [s.strip() for s in (cp.get("Icon Theme", "Directories", fallback="") + "," +
+                                    cp.get("Icon Theme", "ScaledDirectories", fallback="")).split(",") if s.strip()]
+        subs = sorted(set(subs), key=lambda s: rank(cp, s))
+        found = {}
+        for sub in subs:
+            for base in theme_dirs(t):
+                d = base / sub
+                if not d.is_dir():
+                    continue
+                for f in d.iterdir():
+                    if f.suffix in EXTS and f.stem not in found:
+                        try:
+                            if f.is_file():
+                                found[f.stem] = str(f)
+                        except OSError:
+                            pass
+        for k, v in found.items():
+            icons.setdefault(k, v)
+    return icons
+
+
+def main(argv):
+    if len(argv) != 2:
+        raise SystemExit("uso: lowpan-icon-map TEMA SAIDA.json")
+    theme, out = argv
+    icons = build(theme)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"theme": theme, "icons": icons}, ensure_ascii=False, separators=(",", ":")))
+    os.replace(tmp, out)
+    print(f"{theme}: {len(icons)} ícones", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

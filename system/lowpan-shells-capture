@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""LowPan Shells — ferramenta de captura exclusiva: Spectacle OU iNiR.
+
+  lowpan-shells-capture status               mostra a ferramenta ativa e os atalhos
+  lowpan-shells-capture inir [--keep-config]       iNiR captura; teclas do Spectacle tomadas
+  lowpan-shells-capture spectacle [--keep-config]  Spectacle captura; teclas devolvidas
+
+Modo iNiR: as teclas de todas as ações do Spectacle são guardadas em
+~/.local/state/lowpan-shells/spectacle-shortcuts.json e zeradas; no lugar entram os atalhos
+"LowPan Shells — Captura: …" (~/.local/share/applications/lowpan-shells-capture-*.desktop),
+que chamam `qs -c lowpan-shells ipc call region …`. Modo Spectacle: os atalhos do LowPan saem e
+as teclas guardadas voltam exatamente como estavam.
+--keep-config: não grava lowpan.captureTool no config.json (as Configurações do shell já gravaram).
+"""
+import json
+import os
+import subprocess
+import sys
+
+import dbus
+
+# Idioma das mensagens: o do sistema (inglês por padrão; português em sistema pt), como o shell em "auto".
+# Os nomes dos atalhos vão nos dois idiomas no .desktop (Name= e Name[pt_BR]=): o KDE escolhe sozinho.
+PT = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or "").lower().startswith("pt")
+
+
+def T(en, pt):
+    return pt if PT else en
+
+
+USAGE_EN = """LowPan Shells — one capture tool at a time: Spectacle OR iNiR.
+
+  lowpan-shells-capture status                     shows the active tool and the shortcuts
+  lowpan-shells-capture inir [--keep-config]       iNiR captures; Spectacle's keys are taken
+  lowpan-shells-capture spectacle [--keep-config]  Spectacle captures; keys given back
+
+--keep-config: don't write lowpan.captureTool to config.json (the shell's Settings already did).
+"""
+
+HOME = os.path.expanduser("~")
+APPS = os.path.join(os.environ.get("XDG_DATA_HOME", HOME + "/.local/share"), "applications")
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "lowpan-shells")
+SAVED = os.path.join(STATE, "spectacle-shortcuts.json")
+CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME", HOME + "/.config"), "illogical-impulse", "config.json")
+SPECTACLE = "org.kde.spectacle.desktop"
+IPC = "/usr/bin/qs -c lowpan-shells ipc call region"
+
+META, SHIFT, CTRL, ALT = 0x10000000, 0x02000000, 0x04000000, 0x08000000
+PRINT, KEY_A, KEY_R, KEY_S, KEY_X = 0x01000009, 0x41, 0x52, 0x53, 0x58
+
+# id, (nome em inglês, nome em português), comando IPC, [(texto, código)]
+SHORTCUTS = [
+    ("menu", ("Snip menu", "Menu de recorte"), "menu", [("Meta+Shift+S", META | SHIFT | KEY_S)]),
+    ("region", ("Snip a region", "Recortar região"), "screenshot",
+     [("Print", PRINT), ("Meta+Shift+Print", META | SHIFT | PRINT), ("Meta+Ctrl+Print", META | CTRL | PRINT)]),
+    ("fullscreen", ("Whole screen", "Tela inteira"), "fullscreen", [("Shift+Print", SHIFT | PRINT)]),
+    ("window", ("Active window", "Janela ativa"), "window", [("Meta+Print", META | PRINT)]),
+    ("ocr", ("Read text (OCR)", "Ler texto (OCR)"), "ocr", [("Meta+Shift+X", META | SHIFT | KEY_X)]),
+    ("search", ("Search image", "Pesquisar imagem"), "search", [("Meta+Shift+A", META | SHIFT | KEY_A)]),
+    ("record", ("Record a region", "Gravar região"), "record", [("Meta+R", META | KEY_R), ("Meta+Ctrl+R", META | CTRL | KEY_R)]),
+    ("record-sound", ("Record a region with sound", "Gravar região com som"), "recordWithSound", [("Meta+Shift+R", META | SHIFT | KEY_R)]),
+    ("record-screen", ("Record the whole screen", "Gravar a tela inteira"), "recordScreen", [("Meta+Alt+R", META | ALT | KEY_R)]),
+]
+
+NO_AUTOLOADING, SET_PRESENT = 4, 2
+
+kga = dbus.Interface(dbus.SessionBus().get_object("org.kde.kglobalaccel", "/kglobalaccel"),
+                     "org.kde.KGlobalAccel")
+
+
+def desktop_file(sid):
+    return "lowpan-shells-capture-%s.desktop" % sid
+
+
+def action_id(comp, act, cfn="", afn=""):
+    return dbus.Array([comp, act, cfn, afn], signature="s")
+
+
+def keys_of(comp, act):
+    return [[int(k) for k in combo[0]] for combo in kga.shortcutKeys(action_id(comp, act))]
+
+
+def owner_of(code):
+    a = kga.action(dbus.Int32(code))
+    return (str(a[0]), str(a[1])) if a else None
+
+
+def set_keys(aid, combos, flags):
+    arr = dbus.Array([dbus.Struct([dbus.Array([dbus.Int32(k) for k in c], signature="i")], signature=None)
+                      for c in combos], signature="(ai)")
+    kga.setShortcutKeys(aid, arr, dbus.UInt32(flags))
+
+
+def spectacle_actions():
+    try:
+        return [[str(x) for x in a] for a in kga.allActionsForComponent(dbus.Array([SPECTACLE], signature="s"))]
+    except dbus.DBusException:
+        return []
+
+
+def write_config(tool):
+    try:
+        with open(CONFIG) as f:
+            cfg = json.load(f)
+    except (OSError, ValueError) as e:
+        print(T("warning: config.json not read (%s); lowpan.captureTool not written", "aviso: config.json não lido (%s); lowpan.captureTool não gravado") % e, file=sys.stderr)
+        return
+    cfg.setdefault("lowpan", {})
+    if cfg["lowpan"].get("captureTool") == tool:
+        return
+    cfg["lowpan"]["captureTool"] = tool
+    tmp = CONFIG + ".lowpan-tmp"
+    with open(tmp, "w") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, CONFIG)
+
+
+def to_inir():
+    # 1) guarda e zera as teclas do Spectacle (só na primeira vez: rodar de novo não perde o original)
+    if not os.path.exists(SAVED):
+        saved = []
+        for a in spectacle_actions():
+            combos = keys_of(a[0], a[1])
+            if any(any(c) for c in combos):
+                saved.append({"action": a, "keys": combos})
+        os.makedirs(STATE, exist_ok=True)
+        with open(SAVED, "w") as f:
+            json.dump(saved, f, indent=2, ensure_ascii=False)
+    with open(SAVED) as f:
+        saved = json.load(f)
+    for item in saved:
+        set_keys(action_id(*item["action"]), [], NO_AUTOLOADING)
+        print(T("taken   %s from Spectacle", "tomado  %s do Spectacle") % item["action"][3])
+
+    # 2) registra os atalhos do LowPan
+    os.makedirs(APPS, exist_ok=True)
+    for sid, names, ipc, keys in SHORTCUTS:
+        name = T(*names)
+        fname = desktop_file(sid)
+        free = []
+        for text, code in keys:
+            owner = owner_of(code)
+            if owner and owner[0] not in (fname, SPECTACLE):
+                print(T("SKIPPED %s (%s): already belongs to \"%s\"", "PULADO  %s (%s): já é de \"%s\"") % (text, name, owner[0]))
+                continue
+            free.append((text, code))
+        if not free:
+            continue
+        full_en = "LowPan Shells — Capture: " + names[0]
+        full_pt = "LowPan Shells — Captura: " + names[1]
+        full = T(full_en, full_pt)
+        with open(os.path.join(APPS, fname), "w") as f:
+            f.write("[Desktop Entry]\nType=Application\nName=%s\nName[pt_BR]=%s\nName[pt]=%s\nExec=%s %s\n"
+                    "Icon=camera-photo\nTerminal=false\nNoDisplay=true\nX-KDE-Shortcuts=%s\n"
+                    % (full_en, full_pt, full_pt, IPC, ipc, ",".join(t for t, _ in free)))
+        aid = action_id(fname, "_launch", full, full)
+        kga.doRegister(aid)
+        # SetPresent: sem ele a ação fica inativa e o KWin não escuta a tecla
+        set_keys(aid, [[c, 0, 0, 0] for _, c in free], SET_PRESENT)
+        print("ok      %s → %s" % (", ".join(t for t, _ in free), name))
+
+
+def to_spectacle():
+    for sid, names, _ipc, _keys in SHORTCUTS:
+        name = T(*names)
+        fname = desktop_file(sid)
+        try:
+            kga.unregister(fname, "_launch")
+        except dbus.DBusException:
+            pass
+        path = os.path.join(APPS, fname)
+        if os.path.exists(path):
+            os.remove(path)
+            print(T("removed %s", "removido %s") % name)
+    if os.path.exists(SAVED):
+        with open(SAVED) as f:
+            for item in json.load(f):
+                set_keys(action_id(*item["action"]), item["keys"], NO_AUTOLOADING)
+                print(T("given back %s to Spectacle", "devolvido %s ao Spectacle") % item["action"][3])
+        os.remove(SAVED)
+
+
+def status():
+    try:
+        with open(CONFIG) as f:
+            tool = json.load(f).get("lowpan", {}).get("captureTool", "spectacle")
+    except (OSError, ValueError):
+        tool = "?"
+    print(T("tool: %s%s", "ferramenta: %s%s") % (tool, T("  (Spectacle keys saved)", "  (teclas do Spectacle guardadas)") if os.path.exists(SAVED) else ""))
+    for sid, names, _ipc, keys in SHORTCUTS:
+        name = T(*names)
+        on = os.path.exists(os.path.join(APPS, desktop_file(sid)))
+        print("  %-3s %-40s %s" % ("✓" if on else "-", ", ".join(t for t, _ in keys), name))
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    keep = "--keep-config" in argv
+    if cmd == "inir":
+        to_inir()
+        if not keep:
+            write_config("inir")
+    elif cmd == "spectacle":
+        to_spectacle()
+        if not keep:
+            write_config("spectacle")
+    elif cmd == "status":
+        status()
+        return 0
+    else:
+        print(T(USAGE_EN, __doc__), file=sys.stderr)
+        return 2
+    subprocess.run(["kbuildsycoca6"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

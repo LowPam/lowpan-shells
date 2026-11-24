@@ -1,0 +1,505 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: LowPan Tiling\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Form"
+msgstr "Formulário"
+
+msgid "Layouts"
+msgstr "Layouts"
+
+msgid "<html><head/><body><p>0 - to disable</p></body></html>"
+msgstr "<html><head/><body><p>0 desliga</p></body></html>"
+
+msgid "Tile Layout"
+msgstr "Layout lado a lado"
+
+msgid "Order:"
+msgstr "Ordem:"
+
+msgid "Initial rotation angle"
+msgstr "Ângulo inicial de rotação"
+
+msgid "Monocle Layout"
+msgstr "Layout monóculo"
+
+msgid "All windows will be maximized in Monocle layout"
+msgstr "No layout monóculo todas as janelas ficam maximizadas"
+
+msgid "Fully maximize windows (no borders, no gaps)"
+msgstr "Maximizar por inteiro (sem bordas, sem espaços)"
+
+msgid "Minimize unfocused windows (WIP)"
+msgstr "Minimizar as janelas sem foco (em teste)"
+
+msgid "Three Column Layout"
+msgstr "Layout de três colunas"
+
+msgid "Spiral Layout"
+msgstr "Layout espiral"
+
+msgid "Quarter Layout"
+msgstr "Layout em quartos"
+
+msgid "Reset Quarter layout after closing a window"
+msgstr "Recompor o layout em quartos ao fechar uma janela"
+
+msgid "Stacked Layout"
+msgstr "Layout empilhado"
+
+msgid "Columns Layout"
+msgstr "Layout de colunas"
+
+msgid "Creating a new window in the shortest column"
+msgstr "Janela nova vai para a coluna mais curta"
+
+msgid "Balanced"
+msgstr "Equilibrado"
+
+msgid "Config"
+msgstr "Configuração"
+
+msgid "<html><head/><body><p>Comma-separated list OutputName:VirtualDesktopName:ActivityId:ColumnWeight:ColumnWeight:... OutputName value you will see if run KSystemLog and type krohnkite in filter string. The data will right under Krohenkite start string.If all weights are equal they will not be taken into account </p><p>Example: Any monitors 3 columns without weights:</p><p>:::1:1:1</p><p>Example with desktop name and activity id 3 columns the third one is twice as big as the first two:</p><p>HDMI-A-1:Desktop 1:99e10d31-e8f3-44aa-bbed-2a543f13fa54:1:1:2</p></body></html>"
+msgstr "<html><head/><body><p>Lista separada por vírgulas: NomeDaSaída:NomeDaÁreaDeTrabalho:IdDaAtividade:PesoDaColuna:PesoDaColuna:… O nome da saída aparece no KSystemLog (filtre por krohnkite), logo abaixo da linha de início. Pesos todos iguais são ignorados.</p><p>Exemplo: qualquer monitor, 3 colunas sem pesos:</p><p>:::1:1:1</p><p>Exemplo com nome da área de trabalho e id da atividade, 3 colunas, a terceira com o dobro das duas primeiras:</p><p>HDMI-A-1:Desktop 1:99e10d31-e8f3-44aa-bbed-2a543f13fa54:1:1:2</p></body></html>"
+
+msgid "Spread Layout"
+msgstr "Layout espalhado"
+
+msgid "Floating Layout"
+msgstr "Layout flutuante"
+
+msgid "Stair Layout"
+msgstr "Layout em escada"
+
+msgid "Reverse the stair layout's direction"
+msgstr "Inverter a direção da escada"
+
+msgid "Binary Tree Layout"
+msgstr "Layout em árvore binária"
+
+msgid "Cascade Layout"
+msgstr "Layout em cascata"
+
+msgid "Geometry"
+msgstr "Geometria"
+
+msgid "Default Gaps"
+msgstr "Espaços padrão"
+
+msgid "Top"
+msgstr "Em cima"
+
+msgid "Bottom"
+msgstr "Embaixo"
+
+msgid "Left"
+msgstr "Esquerda"
+
+msgid "Right"
+msgstr "Direita"
+
+msgid "Between tiles"
+msgstr "Entre as janelas"
+
+msgid "Override default gaps for a screen"
+msgstr "Espaços próprios para uma tela"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">Overriding default gaps parameters for the specified Screen Name(OutputName). Format:</span></p><p><span style=\" font-size:12pt; font-weight:700;\">OutputName:&lt;left,right,top,bottom,between&gt;=number,...&lt;Enter&gt;</span></p><p><span style=\" font-size:12pt; font-weight:700;\">OutputName:ActivityId:VirtualDesktopName:&lt;left,right,top,bottom,between&gt;=number,...&lt;Enter&gt;</span></p><p><span style=\" font-size:12pt; font-weight:700;\">xrandr --listmonitors</span><span style=\" font-size:12pt;\"> to define Output names</span></p><p><span style=\" font-size:12pt; font-weight:700;\">left,right,top,bottom,between</span><span style=\" font-size:12pt;\"> or you can use shortname</span><span style=\" font-size:12pt; font-weight:700;\"> l,r,t,b,e </span></p><p><span style=\" font-size:12pt;\">You can only write down the parameters you want to change. Examples:</span></p><p><span style=\" font-size:12pt;\">on monitor with Output name </span><span style=\" font-size:12pt; font-weight:700;\">DP-2 </span><span style=\" font-size:12pt;\">will override right gap to 10, left gap to 20 and between gap to 10</span></p><p><span style=\" font-size:12pt; font-weight:700;\">DP-2:r=10,l=20,between=10</span></p><p><span style=\" font-size:12pt;\">this one, will override between gaps only for defined display, virtual desktop and activity</span></p><p><span style=\" font-size:12pt; font-weight:700;\">HDMI-A-1:99e10d31-e8f3-44aa-bbed-2a543f13fa54:Desktop 1:e=0</span></p></body></html>"
+msgstr "<html><head/><body><p>Espaços próprios para uma tela (NomeDaSaída). Formato:</p><p><b>NomeDaSaída:&lt;left,right,top,bottom,between&gt;=número,…&lt;Enter&gt;</b></p><p><b>NomeDaSaída:IdDaAtividade:NomeDaÁreaDeTrabalho:&lt;left,right,top,bottom,between&gt;=número,…&lt;Enter&gt;</b></p><p><b>xrandr --listmonitors</b> mostra os nomes das saídas.</p><p><b>left,right,top,bottom,between</b> ou os nomes curtos <b>l,r,t,b,e</b>.</p><p>Escreva só o que quer mudar. Exemplos:</p><p>na saída <b>DP-2</b>: direita 10, esquerda 20 e entre janelas 10:</p><p><b>DP-2:r=10,l=20,between=10</b></p><p>só o espaço entre janelas, numa tela, área de trabalho e atividade:</p><p><b>HDMI-A-1:99e10d31-e8f3-44aa-bbed-2a543f13fa54:Desktop 1:e=0</b></p></body></html>"
+
+msgid "OutputName:<left,right,top,bottom,between>=number,...<Enter>"
+msgstr "NomeDaSaída:<left,right,top,bottom,between>=número,…<Enter>"
+
+msgid "Maximum Tile Width"
+msgstr "Largura máxima da janela"
+
+msgid "Ratio of the max width to screen height "
+msgstr "Proporção entre a largura máxima e a altura da tela "
+
+msgid "<html><head/><body><p>value 1.6 means the width of the tile can be 60% greater than  the height</p></body></html>"
+msgstr "<html><head/><body><p>1,6 quer dizer que a largura pode ser até 60% maior que a altura</p></body></html>"
+
+msgid "Limit the width of tiled windows"
+msgstr "Limitar a largura das janelas lado a lado"
+
+msgid "Behavior"
+msgstr "Comportamento"
+
+msgid "Layout Adjustment"
+msgstr "Ajuste do layout"
+
+msgid "Resizing window will cause layout to be adjusted. The actual behaviour might differ based on layout in use."
+msgstr "Redimensionar uma janela ajusta o layout. O resultado depende do layout em uso."
+
+msgid "Adjust layout by resizing windows"
+msgstr "Ajustar o layout ao redimensionar janelas"
+
+msgid "If enabled, resizing window will immediately adjust layout. If disabled, layout will be adjusted *after* window resizing is over."
+msgstr "Ligado: o layout se ajusta enquanto a janela é redimensionada. Desligado: só *depois* de soltar."
+
+msgid "Adjust layout in realtime as window is being resized"
+msgstr "Ajustar o layout em tempo real durante o redimensionamento"
+
+msgid "Directional Keys Behaviors"
+msgstr "Teclas de direção"
+
+msgid "Up"
+msgstr "Para cima"
+
+msgid "Directional"
+msgstr "Direcional"
+
+msgid "DWM st&yle"
+msgstr "Estilo D&WM"
+
+msgid "Focus Next"
+msgstr "Focar a próxima"
+
+msgid "Down"
+msgstr "Para baixo"
+
+msgid "Focus Prev"
+msgstr "Focar a anterior"
+
+msgid "Adjust Layout"
+msgstr "Ajustar o layout"
+
+msgid "Focus Up"
+msgstr "Focar acima"
+
+msgid "Focus Down"
+msgstr "Focar abaixo"
+
+msgid "Focus Left"
+msgstr "Focar à esquerda"
+
+msgid "Focus Right"
+msgstr "Focar à direita"
+
+msgid "Position of the New Window"
+msgstr "Posição da janela nova"
+
+msgid "Last"
+msgstr "Última"
+
+msgid "First"
+msgstr "Primeira"
+
+msgid "Second"
+msgstr "Segunda"
+
+msgid "Rules"
+msgstr "Regras"
+
+msgid "Ignore Windows"
+msgstr "Ignorar janelas"
+
+msgid "By Title"
+msgstr "Pelo título"
+
+msgid "By Class"
+msgstr "Pela classe"
+
+msgid "Comma-separated list of window classes. Matching windows will not be tiled."
+msgstr "Classes de janela separadas por vírgula. Essas janelas não entram no tiling."
+
+msgid "Comma-separated list of keywords(or substrings). Any windows with matching title will not be tiled."
+msgstr "Palavras (ou trechos) separadas por vírgula. Janelas com esse título não entram no tiling."
+
+msgid "By Role"
+msgstr "Pelo papel"
+
+msgid "Float Windows"
+msgstr "Janelas flutuantes"
+
+msgid "Comma-separated list of window classes. Matching windows will become float automatically."
+msgstr "Classes de janela separadas por vírgula. Essas janelas flutuam sozinhas."
+
+msgid "Comma-separated list of keywords(or substrings). Any windows with matching title will become float automatically"
+msgstr "Palavras (ou trechos) separadas por vírgula. Janelas com esse título flutuam sozinhas."
+
+msgid "This is mainly for debugging purpose, but can also be used to meet some specific requirements."
+msgstr "Serve mais para depuração, mas pode resolver casos específicos."
+
+msgid "Float utility windows\n(applies to window type Dialog, Splash, Utility)"
+msgstr "Janelas utilitárias flutuam\n(tipos Diálogo, Abertura e Utilitário)"
+
+msgid "Disable Tiling"
+msgstr "Sem tiling"
+
+msgid "<html><head/><body><p>Comma-separated list of activity IDs. See Readme or Issue #125 to know IDs. Windows in corresponding activities will not be tiled.</p></body></html>"
+msgstr "<html><head/><body><p>IDs de atividade separados por vírgula (veja o Readme ou a issue #125 do Krohnkite). Janelas nessas atividades não entram no tiling.</p></body></html>"
+
+msgid "On Activity (activityId)"
+msgstr "Na atividade (id)"
+
+msgid "On Screen (name)"
+msgstr "Na tela (nome)"
+
+msgid "Comma-separated list of screen names. Windows in corresponding screens will not be tiled."
+msgstr "Nomes de tela separados por vírgula. Janelas nessas telas não entram no tiling."
+
+msgid "On Virtual Desktop"
+msgstr "Na área de trabalho"
+
+msgid "Comma-separated list of Virtual Desktops names. Windows corresponding to these will not be tiled."
+msgstr "Nomes de áreas de trabalho separados por vírgula. Janelas nelas não entram no tiling."
+
+msgid "Always, except by class"
+msgstr "Sempre, menos estas classes"
+
+msgid "Comma-separated list of window classes. Matching windows will become tiled automatically."
+msgstr "Classes de janela separadas por vírgula. Essas janelas entram no tiling sozinhas."
+
+msgid "Screen default layout"
+msgstr "Layout padrão por tela"
+
+msgid "<html><head/><body><p>Comma-separated list OutputName:LayoutName. 'Layout' word can be omit. </p><p>2 monitors example: HDMI-A-1:spread,DP-2:tile</p><p>Example with desktop name: HDMI-A-1:Desktop 1:1,HDMI-A-1:Desktop 2:columns</p></body></html>"
+msgstr "<html><head/><body><p>Lista separada por vírgulas: NomeDaSaída:NomeDoLayout (a palavra \"Layout\" pode ficar de fora).</p><p>Dois monitores: HDMI-A-1:spread,DP-2:tile</p><p>Com nome da área de trabalho: HDMI-A-1:Desktop 1:1,HDMI-A-1:Desktop 2:columns</p></body></html>"
+
+msgid "OutputName:LayoutName,..."
+msgstr "NomeDaSaída:NomeDoLayout,…"
+
+msgid "Dock"
+msgstr "Doca"
+
+msgid "<html><head/><body><p>hv - short name</p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>hv</b></p></body></html>"
+
+msgid "Surfaces configuration"
+msgstr "Configuração por superfície"
+
+msgid "Order of docked windows"
+msgstr "Ordem das janelas na doca"
+
+msgid "Off"
+msgstr "Desligado"
+
+msgid "Third"
+msgstr "Terceira"
+
+msgid "Fourth"
+msgstr "Quarta"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">Overriding default parameters for every surface. Format: </span><span style=\" font-size:12pt; font-weight:700;\">OuputName:ActivityId:VirtualDesktopName:shortname=value,shortname=value... &lt;Enter&gt;</span></p><p><span style=\" font-size:12pt;\">You can only write down parameters you want to change. You can see the short name of the parameter if you hover over any default parameter above.</span></p><p><span style=\" font-size:12pt;\">Next example override three params on all surfaces with OutputName=HDMI-A-1 </span></p><p><span style=\" font-size:12pt; font-weight:700;\">HDMI-A-1:::hh=80,vw=80,ha=left</span></p><p><span style=\" font-size:12pt;\">this one, will override two params only for defined display, virtual desktop and activity</span></p><p><span style=\" font-size:12pt; font-weight:700;\">HDMI-A-1:99e10d31-e8f3-44aa-bbed-2a543f13fa54:Desktop 1:vg=5,va=2</span></p></body></html>"
+msgstr "<html><head/><body><p>Valores próprios por superfície. Formato: <b>NomeDaSaída:IdDaAtividade:NomeDaÁreaDeTrabalho:nomecurto=valor,nomecurto=valor… &lt;Enter&gt;</b></p><p>Escreva só o que quer mudar. O nome curto de cada valor aparece ao passar o mouse sobre ele acima.</p><p>Este exemplo muda três valores em todas as superfícies da saída HDMI-A-1:</p><p><b>HDMI-A-1:::hh=80,vw=80,ha=left</b></p><p>Este muda dois valores só na tela, área de trabalho e atividade indicadas:</p><p><b>HDMI-A-1:99e10d31-e8f3-44aa-bbed-2a543f13fa54:Desktop 1:vg=5,va=2</b></p></body></html>"
+
+msgid "Default settings for a docked window"
+msgstr "Padrão para uma janela na doca"
+
+msgid "Up/Bottom Dock"
+msgstr "Doca em cima/embaixo"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name:</span><span style=\" font-weight:700;\">hh</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>hh</b></p></body></html>"
+
+msgid "Height"
+msgstr "Altura"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name: </span><span style=\" font-weight:700;\">hw</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>hw</b></p></body></html>"
+
+msgid "<html><head/><body><p>vw - short name</p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>vw</b></p></body></html>"
+
+msgid "Wide"
+msgstr "Largura"
+
+msgid "Gaps"
+msgstr "Espaços"
+
+msgid "Horizontal "
+msgstr "Horizontal "
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name: </span><span style=\" font-weight:700;\">hgv</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>hgv</b></p></body></html>"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name:</span><span style=\" font-weight:700;\">hgh</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>hgh</b></p></body></html>"
+
+msgid "Vertical"
+msgstr "Vertical"
+
+msgid "Alignment"
+msgstr "Alinhamento"
+
+msgid "Horizontal"
+msgstr "Horizontal"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name: </span><span style=\" font-weight:700;\">he</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>he</b></p></body></html>"
+
+msgid "Outside"
+msgstr "Fora"
+
+msgid "Middle"
+msgstr "Meio"
+
+msgid "Inside"
+msgstr "Dentro"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name:</span><span style=\" font-weight:700;\">ha</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>ha</b></p></body></html>"
+
+msgid "Center"
+msgstr "Centro"
+
+msgid "Left/Right Dock"
+msgstr "Doca à esquerda/direita"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name: </span><span style=\" font-weight:700;\">vh</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>vh</b></p></body></html>"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name: </span><span style=\" font-weight:700;\">vw</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>vw</b></p></body></html>"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name:</span><span style=\" font-weight:700;\">vgh</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>vgh</b></p></body></html>"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name:</span><span style=\" font-weight:700;\">vgv</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>vgv</b></p></body></html>"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name: </span><span style=\" font-weight:700;\">va</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>va</b></p></body></html>"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">short name: </span><span style=\" font-weight:700;\">ve</span></p></body></html>"
+msgstr "<html><head/><body><p>nome curto: <b>ve</b></p></body></html>"
+
+msgid "Window class configuration"
+msgstr "Configuração por classe de janela"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">Overriding default parameters for the specified WindowClass. Format:</span></p><p><span style=\" font-size:12pt; font-weight:700;\">WindowClass:SpecialFlag,SpecialFlag...:shortname=value,shortname=value...</span></p><p><span style=\" font-size:12pt; font-weight:700;\">pin - </span><span style=\" font-size:12pt;\">docked window with this flag will displace another if their positions are equal.</span></p><p><span style=\" font-size:12pt; font-weight:700;\">left,right,top,bottom</span><span style=\" font-size:12pt;\"> - you can use one them to explicitly set the initial position.</span></p><p><span style=\" font-size:12pt; font-weight:700;\">auto</span><span style=\" font-size:12pt;\"> - automatically makes a window docked. Krohnkite version &gt;=0.9.9.1</span></p><p><span style=\" font-size:12pt;\">You can only write down the parameters you want to change. You can see the short name of the parameter if you hover over any default parameter above.</span></p><p><span style=\" font-size:12pt;\">Examples:</span></p><p><span style=\" font-size:12pt;\">1. if Elisa switches to dock it will have higher priority, top dock position and 10% of screen height </span></p><p><span style=\" font-size:12pt;\">org.kde.elisa</span><span style=\" font-size:12pt; font-weight:700;\">:pin,top:hh=10</span></p><p><span style=\" font-size:12pt;\">2. Conky automatic docking</span></p><p><span style=\" font-family:'Hack'; font-size:12pt;\">Conky:</span><span style=\" font-family:'Hack'; font-size:12pt; font-weight:700;\">auto</span><span style=\" font-family:'Hack'; font-size:12pt;\">:</span></p></body></html>"
+msgstr "<html><head/><body><p>Valores próprios para uma classe de janela. Formato:</p><p><b>ClasseDaJanela:Marca,Marca…:nomecurto=valor,nomecurto=valor…</b></p><p><b>pin</b> — na mesma posição, a janela com esta marca tira a outra do lugar.</p><p><b>left,right,top,bottom</b> — define a posição inicial.</p><p><b>auto</b> — a janela vai para a doca sozinha.</p><p>Escreva só o que quer mudar. O nome curto de cada valor aparece ao passar o mouse sobre ele acima.</p><p>Exemplos:</p><p>1. o Elisa na doca com prioridade, em cima e com 10% da altura da tela:</p><p>org.kde.elisa<b>:pin,top:hh=10</b></p><p>2. o Conky vai para a doca sozinho:</p><p>Conky:<b>auto</b>:</p></body></html>"
+
+msgid "Options"
+msgstr "Opções"
+
+msgid "Window Layer"
+msgstr "Camada das janelas"
+
+msgid "Tiled"
+msgstr "Lado a lado"
+
+msgid "Normal"
+msgstr "Normal"
+
+msgid "Above"
+msgstr "Acima"
+
+msgid "Float  "
+msgstr "Flutuantes  "
+
+msgid "The Sole Window properties"
+msgstr "Quando há uma janela só"
+
+msgid "Width "
+msgstr "Largura "
+
+msgid "No Borders"
+msgstr "Sem bordas"
+
+msgid "No Gaps"
+msgstr "Sem espaços"
+
+msgid "Notifications"
+msgstr "Avisos"
+
+msgid "<html><head/><body><p>Set the time (in milliseconds) for how long a pop-up notification will remain visible before it automatically disappears. A value of 0 will disable notifications.</p></body></html>"
+msgstr "<html><head/><body><p>Quanto tempo (em milissegundos) o aviso fica na tela antes de sumir. 0 desliga os avisos.</p></body></html>"
+
+msgid "Duration  "
+msgstr "Duração  "
+
+msgid "All tiled windows will have no borders. Borders will be added back if window become float."
+msgstr "As janelas lado a lado ficam sem borda; a borda volta quando a janela flutua."
+
+msgid "Use separate layouts for each Activity"
+msgstr "Um layout para cada atividade"
+
+msgid "Use separate layouts for each Desktop"
+msgstr "Um layout para cada área de trabalho"
+
+msgid "Remove borders of tiled windows"
+msgstr "Tirar a borda das janelas lado a lado"
+
+msgid "Always preserve the tiling status of a window upon dragging"
+msgstr "Manter o estado da janela (lado a lado ou flutuante) ao arrastar"
+
+msgid "Prevent windows from minimizing (experimental)"
+msgstr "Impedir que as janelas minimizem (experimental)"
+
+msgid "Prevent window from protruding from its screen"
+msgstr "Impedir que a janela passe da borda da tela"
+
+msgid "<html><head/><body><p>If enabled, all windows with property skipPager=true become floating. You can create KDE Window Rule and force  skipPager=true.</p></body></html>"
+msgstr "<html><head/><body><p>Ligado: toda janela com skipPager=true flutua. Dá para forçar skipPager=true com uma regra de janela do KDE.</p></body></html>"
+
+msgid "Make the window float if its property: skipPager=true (HACK)"
+msgstr "Flutuar a janela com skipPager=true (gambiarra)"
+
+msgid "Log"
+msgstr "Registro"
+
+msgid "Use this option to debug the script or submit detailed bug report."
+msgstr "Para depurar o script ou mandar um relato de erro detalhado."
+
+msgid "Logging"
+msgstr "Registro"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">logs all windows that Krohnkite indexes and manages</span></p></body></html>"
+msgstr "<html><head/><body><p>registra todas as janelas que o motor indexa e controla</p></body></html>"
+
+msgid "Added new windows"
+msgstr "Janelas novas adicionadas"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">logs all windows that Krohnkite does not manage for many reasons: service, dialog, etc.</span></p></body></html>"
+msgstr "<html><head/><body><p>registra as janelas que o motor não controla (serviço, diálogo etc.)</p></body></html>"
+
+msgid "Filtered new windows"
+msgstr "Janelas novas filtradas"
+
+msgid "<html><head/><body><p><span style=\" font-size:12pt;\">logs all windows that Krohkite could manage if not for the filters in the configuration</span></p></body></html>"
+msgstr "<html><head/><body><p>registra as janelas que o motor controlaria se não fossem os filtros da configuração</p></body></html>"
+
+msgid "Unmanaged new windows"
+msgstr "Janelas novas não controladas"
+
+msgid "<html><head/><body><h4 style=\" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:medium; font-weight:700;\">Filtering log modules</span></h4><p>the group of the log modules checkbox enables the entire group of log modules at once and in order to include only certain modules there is a line-edit nearby. Examples:</p><ul style=\"margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 1;\"><li style=\" margin-top:12px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-family:'Hack';\">1,4-</span> - enable only the first and from the fourth to the last module</li><li style=\" margin-top:0px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-family:'Hack';\">!1,4-6</span> - the exclamation mark at the beginning turns on the exclude mode, so this line will enable all modules except 1 and from 4 to 6. <span style=\" font-family:'Hack';\">!</span> - the exclamation mark you can use only once in the beginning, to enable the exclude mode.</li></ul></body></html>"
+msgstr "<html><head/><body><h4>Filtrar os módulos do registro</h4><p>A caixa de cada grupo liga o grupo inteiro; para só alguns módulos, use o campo ao lado. Exemplos:</p><ul><li><tt>1,4-</tt> — só o primeiro e do quarto ao último</li><li><tt>!1,4-6</tt> — a exclamação no começo inverte: todos menos o 1 e do 4 ao 6 (use a <tt>!</tt> só uma vez, no começo).</li></ul></body></html>"
+
+msgid "filter log modules popup tooltip <<<hover me>>>"
+msgstr "filtro dos módulos do registro <<<passe o mouse>>>"
+
+msgid "<html><head/><body><h5 style=\" margin-top:12px; margin-bottom:4px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:11pt; font-weight:700;\">Workspace signals log modules</span></h5><p><span style=\" font-size:11pt;\">1. screensChanged</span></p><p><span style=\" font-size:11pt;\">2. virtualScreenGeometryChanged</span></p><p><span style=\" font-size:11pt;\">3. currentActivityChanged</span></p><p><span style=\" font-size:11pt;\">4. currentDesktopChanged</span></p><p><span style=\" font-size:11pt;\">5. windowAdded</span></p><p><span style=\" font-size:11pt;\">6. windowActivated</span></p><p><span style=\" font-size:11pt;\">7. windowRemoved</span></p><p><br/></p></body></html>"
+msgstr "<html><head/><body><p><b>Módulos dos sinais da área de trabalho</b></p><p>1. screensChanged</p><p>2. virtualScreenGeometryChanged</p><p>3. currentActivityChanged</p><p>4. currentDesktopChanged</p><p>5. windowAdded</p><p>6. windowActivated</p><p>7. windowRemoved</p></body></html>"
+
+msgid "<html><head/><body><p><span style=\" font-size:11pt; font-weight:700;\">All other log modules</span></p><p><span style=\" font-size:11pt;\">1. shortcut</span></p><p><span style=\" font-size:11pt;\">2. arrangeScreen</span></p><p><span style=\" font-size:11pt;\">3. printConfig</span></p><p><span style=\" font-size:11pt;\">4. setTimeout</span></p><p><span style=\" font-size:11pt;\">5. window</span></p></body></html>"
+msgstr "<html><head/><body><p><b>Outros módulos do registro</b></p><p>1. shortcut</p><p>2. arrangeScreen</p><p>3. printConfig</p><p>4. setTimeout</p><p>5. window</p></body></html>"
+
+msgid "Workspace signals"
+msgstr "Sinais da área de trabalho"
+
+msgid "Window signals     "
+msgstr "Sinais das janelas     "
+
+msgid "<html><head/><body><h5 style=\" margin-top:12px; margin-bottom:4px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:11pt; font-weight:700;\">Window signals log modules</span></h5><p><span style=\" font-size:11pt;\">1. activitiesChanged</span></p><p><span style=\" font-size:11pt;\">2. bufferGeometryChanged</span></p><p><span style=\" font-size:11pt;\">3. desktopsChanged</span></p><p><span style=\" font-size:11pt;\">4. fullScreenChanged</span></p><p><span style=\" font-size:11pt;\">5. interactiveMoveResizeStepped</span></p><p><span style=\" font-size:11pt;\">6. maximizedAboutToChange</span></p><p><span style=\" font-size:11pt;\">7. minimizedChanged</span></p><p><span style=\" font-size:11pt;\">8. moveResizedChanged</span></p><p><span style=\" font-size:11pt;\">9. outputChanged</span></p></body></html>"
+msgstr "<html><head/><body><p><b>Módulos dos sinais das janelas</b></p><p>1. activitiesChanged</p><p>2. bufferGeometryChanged</p><p>3. desktopsChanged</p><p>4. fullScreenChanged</p><p>5. interactiveMoveResizeStepped</p><p>6. maximizedAboutToChange</p><p>7. minimizedChanged</p><p>8. moveResizedChanged</p><p>9. outputChanged</p></body></html>"
+
+msgid "Other                       "
+msgstr "Outros                       "
+
+msgid "<html><head/><body><p><span style=\" font-size:11pt;\">Also, in addition to the fact that you can include only the modules you need, you can enable </span><span style=\" font-family:'Hack'; font-size:11pt;\">Filter</span><span style=\" font-size:11pt;\"> checkbox and use other filters in filter line edit:</span></p><p><span style=\" font-size:11pt;\">- </span><span style=\" font-size:11pt; font-weight:700;\">winclass</span></p><p><span style=\" font-size:11pt;\">Examples:</span></p><p><span style=\" font-family:'Hack'; font-size:11pt;\">- </span><span style=\" font-family:'Hack'; font-size:11pt; font-weight:700;\">winclass=[konsole]</span><span style=\" font-size:11pt; font-weight:700;\"/><span style=\" font-size:11pt;\">- some modules may be filtered by a window class, so this logs modules will show only windows with class that contains </span><span style=\" font-family:'Hack'; font-size:11pt;\">konsole</span><span style=\" font-size:11pt;\"> word.</span></p><p><span style=\" font-family:'Hack'; font-size:11pt;\">- </span><span style=\" font-family:'Hack'; font-size:11pt; font-weight:700;\">!winclass=org.kde.elisa:org.kde.ruler</span><span style=\" font-size:11pt;\"> -Exclude Elisa and Kruler from log output</span></p></body></html>"
+msgstr "<html><head/><body><p>Além de escolher os módulos, você pode ligar a caixa <tt>Filtro</tt> e usar estes filtros no campo:</p><p>- <b>winclass</b></p><p>Exemplos:</p><p><tt>- <b>winclass=[konsole]</b></tt> — módulos que filtram pela classe da janela mostram só as que têm <tt>konsole</tt> na classe.</p><p><tt>- <b>!winclass=org.kde.elisa:org.kde.ruler</b></tt> — tira o Elisa e o KRuler do registro.</p></body></html>"
+
+msgid "Filter"
+msgstr "Filtro"
+
+msgid "Tiling on in this environment (iRiS or Plasma)"
+msgstr "Tiling ligado neste ambiente (iRiS ou Plasma)"
+
+msgid "On: windows become columns and the tiling takes Meta+arrows and the title bar buttons. Off: everything goes back to KDE. Each environment (iRiS and Plasma) keeps its own choice."
+msgstr "Ligado: as janelas viram colunas e o tiling fica com as Meta+setas e os botões da barra de título. Desligado: tudo volta para o KDE. Cada ambiente (iRiS e Plasma) guarda a sua escolha."

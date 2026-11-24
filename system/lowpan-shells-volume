@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# LowPan Shells — teclas de volume do teclado nos dois modos.
+# Com o LowPan Shells ativo: o próprio shell muda o volume (a Ilha mostra a barra de volume, como no Niri).
+# No Plasma normal: chama a ação original do KDE (serviço de áudio, com a caixa de volume dele).
+#
+#   lowpan-shells-volume up|down|mute|mic
+case "${1:-}" in
+    up) ipc=volumeUp; kde=increase_volume ;;
+    down) ipc=volumeDown; kde=decrease_volume ;;
+    mute) ipc=mute; kde=mute ;;
+    mic) ipc=micMute; kde=mic_mute ;;
+    *) echo "uso/usage: $(basename "$0") up|down|mute|mic" >&2; exit 2 ;;
+esac
+if systemctl --user is-active --quiet lowpan-shells.service; then
+    exec /usr/bin/qs -c lowpan-shells ipc call audio "$ipc"
+fi
+exec busctl --user call org.kde.kglobalaccel /component/kmix org.kde.kglobalaccel.Component invokeShortcut s "$kde"

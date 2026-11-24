@@ -1,0 +1,20 @@
+# LowPan Shells — no login, o Plasma sobe com o perfil de tema dele (§21.64; marcador de sessão §21.72).
+# Sair da sessão estando no LowPan (modo "try") não passa pelo "lowpan-shells-switch off", então o tema do LowPan
+# ficava valendo no Plasma do próximo login. A lógica está no system/lowpan-sessao-login (antes do KWin):
+# marcador "iris" → sobe o LowPan (a escolha do login manda); "plasma" → desfaz um "on" se preciso e troca para
+# o perfil "plasma"; sem marcador (login antigo) → troca para "plasma" se o LowPan não estiver habilitado.
+[Unit]
+Description=LowPan Shells: perfil de tema do Plasma no login
+# Antes do KWin: ele já sobe lendo o cursor/decoração do perfil certo (rodar junto travava o
+# plasma-apply-cursortheme, sem tela ainda — 2026-11-11).
+Before=plasma-kwin_wayland.service plasma-plasmashell.service
+ConditionPathExists=%h/.config/quickshell/lowpan-shells
+
+[Service]
+Type=oneshot
+Environment=LOWPAN_THEME_NO_CURSOR=1
+# Lógica no system/lowpan-sessao-login (caminho via link ~/.config/quickshell/lowpan-shells -> <projeto>/shell).
+ExecStart=%h/.config/quickshell/lowpan-shells/../system/lowpan-sessao-login
+
+[Install]
+WantedBy=plasma-workspace.target

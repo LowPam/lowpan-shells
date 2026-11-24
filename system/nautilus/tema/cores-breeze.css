@@ -1,0 +1,36 @@
+/* LowPan Shells (2026-11-14): tons do Nautilus = tons do Qt (esquema de cores do KDE).
+   O colors.css é gerado pelo KDE (kde-gtk-config) a partir do esquema ativo, então trocar o esquema em
+   Configurações › Cores muda o Nautilus também (vale ao reabrir: nautilus -q). Importado DEPOIS do base*.css,
+   para que estas definições vençam as do MacTahoe. */
+@import url("../../../.config/gtk-4.0/colors.css");
+
+@define-color window_bg_color @theme_bg_color_breeze;
+@define-color window_fg_color @theme_fg_color_breeze;
+@define-color view_bg_color @content_view_bg_breeze;
+@define-color view_fg_color @theme_text_color_breeze;
+@define-color headerbar_bg_color @theme_bg_color_breeze;
+@define-color headerbar_fg_color @theme_header_foreground_breeze;
+@define-color headerbar_backdrop_color @theme_bg_color_breeze;
+@define-color sidebar_bg_color @theme_bg_color_breeze;
+@define-color sidebar_fg_color @theme_fg_color_breeze;
+@define-color popover_bg_color @theme_bg_color_breeze;
+@define-color popover_fg_color @theme_fg_color_breeze;
+@define-color dialog_bg_color @theme_bg_color_breeze;
+@define-color dialog_fg_color @theme_fg_color_breeze;
+@define-color card_bg_color @theme_button_background_normal_breeze;
+@define-color accent_bg_color @theme_selected_bg_color_breeze;
+@define-color accent_fg_color @theme_selected_fg_color_breeze;
+@define-color accent_color @theme_selected_bg_color_breeze;
+@define-color theme_selected_fg_color @theme_selected_fg_color_breeze;
+@define-color selected_fg_color @theme_selected_fg_color_breeze;
+@define-color link_color @link_color_breeze;
+@define-color warning_color @warning_color_breeze;
+@define-color error_color @error_color_breeze;
+@define-color success_color @success_color_breeze;
+
+:root {
+  --accent-blue: @theme_selected_bg_color_breeze;
+  --accent-color: @theme_selected_bg_color_breeze;
+  --accent-bg-color: @theme_selected_bg_color_breeze;
+  --accent-fg-color: @theme_selected_fg_color_breeze;
+}

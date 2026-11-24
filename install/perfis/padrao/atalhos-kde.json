@@ -1,0 +1,234 @@
+[
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Cube",
+  "acaoNome": "Alternar cubo",
+  "teclas": [
+   "Meta+C",
+   "Meta+Tab"
+  ],
+  "padrao": [
+   "Meta+C"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Expose",
+  "acaoNome": "Alternar as janelas presentes (área de trabalho atual)",
+  "teclas": [
+   "Ctrl+F9"
+  ],
+  "padrao": [
+   "Ctrl+F9",
+   "Meta+F9"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "ExposeAll",
+  "acaoNome": "Alternar janelas atuais (todas as áreas de trabalho)",
+  "teclas": [
+   "Launch (C)",
+   "Ctrl+F10"
+  ],
+  "padrao": [
+   "Launch (C)",
+   "Ctrl+F10",
+   "Meta+F10"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "ExposeClass",
+  "acaoNome": "Alternar as janelas presentes (classe de janelas)",
+  "teclas": [
+   "Ctrl+F7"
+  ],
+  "padrao": [
+   "Ctrl+F7",
+   "Meta+F7"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Overview",
+  "acaoNome": "Alternar para visão geral",
+  "teclas": [
+   "Meta"
+  ],
+  "padrao": [
+   "Meta+W"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch Window Left",
+  "acaoNome": "Mudar para a janela à esquerda",
+  "teclas": [],
+  "padrao": [
+   "Meta+Alt+Left"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch Window Right",
+  "acaoNome": "Mudar para a janela à direita",
+  "teclas": [],
+  "padrao": [
+   "Meta+Alt+Right"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch to Desktop 1",
+  "acaoNome": "Mudar para a área de trabalho 1",
+  "teclas": [
+   "Ctrl+F1"
+  ],
+  "padrao": [
+   "Ctrl+F1",
+   "Meta+F1"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch to Desktop 2",
+  "acaoNome": "Mudar para a área de trabalho 2",
+  "teclas": [
+   "Ctrl+F2"
+  ],
+  "padrao": [
+   "Ctrl+F2",
+   "Meta+F2"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch to Desktop 3",
+  "acaoNome": "Mudar para a área de trabalho 3",
+  "teclas": [
+   "Ctrl+F3"
+  ],
+  "padrao": [
+   "Ctrl+F3",
+   "Meta+F3"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch to Desktop 4",
+  "acaoNome": "Mudar para a área de trabalho 4",
+  "teclas": [
+   "Ctrl+F4"
+  ],
+  "padrao": [
+   "Ctrl+F4",
+   "Meta+F4"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch to Next Desktop",
+  "acaoNome": "Mudar para a área de trabalho seguinte",
+  "teclas": [
+   "Meta+Alt+Right"
+  ],
+  "padrao": []
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Switch to Previous Desktop",
+  "acaoNome": "Mudar para a área de trabalho anterior",
+  "teclas": [
+   "Meta+Alt+Left"
+  ],
+  "padrao": []
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "ToggleMouseClick",
+  "acaoNome": "Alternar animação do clique do mouse",
+  "teclas": [
+   "Ctrl+Alt+M"
+  ],
+  "padrao": [
+   "Meta+*"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Walk Through Windows",
+  "acaoNome": "Passear pelas janelas",
+  "teclas": [
+   "Alt+Tab"
+  ],
+  "padrao": [
+   "Alt+Tab",
+   "Meta+Tab"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Window Close",
+  "acaoNome": "Fechar janela",
+  "teclas": [
+   "Alt+F4",
+   "Meta+Q"
+  ],
+  "padrao": [
+   "Alt+F4"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Window Maximize",
+  "acaoNome": "Maximizar janela",
+  "teclas": [
+   "Meta+W",
+   "Meta+PgUp"
+  ],
+  "padrao": [
+   "Meta+PgUp"
+  ]
+ },
+ {
+  "comp": "kwin",
+  "compNome": "KWin",
+  "acao": "Window Minimize",
+  "acaoNome": "Minimizar janela",
+  "teclas": [
+   "Meta+PgDown",
+   "Meta+Control"
+  ],
+  "padrao": [
+   "Meta+PgDown"
+  ]
+ },
+ {
+  "comp": "plasmashell",
+  "compNome": "plasmashell",
+  "acao": "manage activities",
+  "acaoNome": "Mostrar seletor de atividade",
+  "teclas": [],
+  "padrao": [
+   "Meta+Q"
+  ]
+ }
+]

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# LowPan Shells — sessão "LowPan" escolhida na tela de login (§21.72). Instalado em
+# /usr/lib/lowpan-greeter/ pelo system/lowpan-greeter (instalar). Grava o marcador de sessão e
+# sobe o Plasma Wayland; o LowPan é o lowpan-shells.service dentro da sessão.
+set -u
+# O greetd abre a sessão pelo PAM/logind, então o XDG_RUNTIME_DIR já existe aqui; se não existir,
+# não grava e segue (sem marcador = comportamento antigo). O XDG_SESSION_ID vai junto: um marcador
+# deixado por uma sessão logind morta não vale no próximo login.
+if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
+    printf 'iris %s\n' "${XDG_SESSION_ID:-}" > "$XDG_RUNTIME_DIR/lowpan-sessao" 2>/dev/null || true
+fi
+exec /usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland

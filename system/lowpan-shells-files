@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# LowPan Shells — Meta+E nos dois modos (2026-11-12).
+# Com o LowPan Shells ativo: abre o Nautilus pelo lowpan-nautilus (tema LowPanNautilus e pasta inicial).
+# No Plasma normal: abre o Dolphin, como o Meta+E original do KDE.
+# Com pastas/URLs nos argumentos é o app padrão de pastas (inode/directory, lowpan-files.desktop): abre essas pastas.
+# Com --dbus é o serviço org.freedesktop.FileManager1 ("mostrar na pasta" de outros programas): o arquivo do pacote
+# nautilus abria o Nautilus sem o tema; aqui vai o Nautilus com tema no LowPan e o Dolphin no Plasma (§19.2 linha 39).
+dir="$(dirname "$(readlink -f "$0")")"
+if [ "${1:-}" = "--dbus" ]; then
+    if systemctl --user is-active --quiet lowpan-shells.service; then
+        exec "$dir/lowpan-nautilus" --gapplication-service
+    fi
+    exec /usr/bin/dolphin --daemon
+fi
+if systemctl --user is-active --quiet lowpan-shells.service; then
+    exec "$dir/lowpan-nautilus" --new-window "$@"
+fi
+exec /usr/bin/dolphin "$@"

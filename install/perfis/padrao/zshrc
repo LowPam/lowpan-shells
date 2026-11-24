@@ -1,0 +1,78 @@
+# ~/.zshrc do LowPan Shells (perfil "pessoal") — feito a partir do zshrc do dono, só com o que vale em qualquer
+# máquina: prompt starship, sugestões e cores dos plugins (pacotes do Arch), histórico do atuin e o fastfetch no kitty.
+# O instalador só cria este arquivo se a conta não tiver um ~/.zshrc. Depois ele o MANTÉM igual ao do projeto (troca
+# no instalar/atualizar se o projeto mudou, pela 1ª linha acima) — os seus ajustes vão em ~/.zshrc.local.
+
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt share_history hist_ignore_dups
+autoload -Uz compinit && compinit
+
+export PATH="$HOME/.local/bin:$PATH"
+
+command -v starship >/dev/null && eval "$(starship init zsh)"
+
+# ordem importa: syntax-highlighting sempre por último
+[[ -r /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] \
+    && source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+# atuin na seta para cima e no Ctrl+R, como na máquina do dono (2026-11-22: ele prefere assim; numa conta nova a
+# lista começa vazia e vai enchendo com o uso)
+# O `atuin history end` de depois de cada comando roda no primeiro plano do terminal por uma fração de segundo (mais
+# com o banco ocupado); fechar o kitty nessa hora dava "Are you sure… It is running: atuin" (notebook, 2026-11-22).
+# setsid -f o tira do grupo do terminal; se uma versão futura mudar o texto, o sed não casa e fica como era.
+command -v atuin >/dev/null && eval "$(atuin init zsh \
+    | sed 's/(\([A-Z_=a-z]* \)\{0,1\}atuin history end \(.*\) &)/(\1setsid -f atuin history end \2)/')"
+[[ -r /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] \
+    && source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# fastfetch só no kitty: ao abrir, no clear e no Ctrl+L. O lowpan-fastfetch (link do instalador) encolhe as caixas
+# ╭───╮ para a largura do terminal; sem ele, o fastfetch direto.
+if [[ "$TERM" == *kitty* || -n "$KITTY_WINDOW_ID" ]]; then
+    _lp_ff() {
+        if [[ -x "$HOME/.local/bin/lowpan-fastfetch" ]]; then "$HOME/.local/bin/lowpan-fastfetch"
+        elif command -v fastfetch >/dev/null; then fastfetch; fi
+        return 0
+    }
+    # o clear com o zle ativo apaga a marca de prompt da integração do kitty (OSC 133;A): sem ela o kitty acha que há
+    # um programa rodando e pergunta "Are you sure…" ao fechar. Reescrita antes de o zle redesenhar o prompt.
+    _lp_ff_marca() { [[ -n "$KITTY_WINDOW_ID" ]] && print -n '\e]133;A\a'; return 0 }
+    # redesenha na largura nova enquanto a tela só tem o fastfetch (antes do 1º comando, depois do clear/Ctrl+L):
+    # o tiling encaixa o kitty depois do 1º desenho, e redimensionar à mão quebrava as caixas (o kitty reflui o texto)
+    typeset -g _lp_ff_redesenha=1
+    _lp_ff
+    clear() {
+        command clear
+        _lp_ff
+        _lp_ff_redesenha=1
+    }
+    zle_clear_and_fastfetch() {
+        zle -I
+        command clear
+        _lp_ff
+        _lp_ff_marca
+        _lp_ff_redesenha=1
+    }
+    zle -N zle_clear_and_fastfetch
+    bindkey '^L' zle_clear_and_fastfetch
+    _lp_ff_comando() { _lp_ff_redesenha=0 }
+    autoload -Uz add-zsh-hook && add-zsh-hook preexec _lp_ff_comando
+    TRAPWINCH() {
+        (( _lp_ff_redesenha )) || return 0
+        zle && zle -I
+        command clear
+        _lp_ff
+        _lp_ff_marca
+        return 0
+    }
+fi
+
+alias up='sudo pacman -Syu'
+alias install='sudo pacman -S'
+alias remove='sudo pacman -Rns'
+alias c='clear'
+alias q='exit'
+
+# ajustes pessoais (o instalador nunca mexe neste)
+[[ -r ~/.zshrc.local ]] && source ~/.zshrc.local
+true

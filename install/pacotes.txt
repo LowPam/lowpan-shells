@@ -1,0 +1,85 @@
+# LowPan Shells — pacotes do repositório oficial (Arch), PLANEJAMENTO §19.2 linha 1 e §22.4 item 6.
+# Critério (2026-11-20): o projeto usa E funciona nesta máquina. O Plasma 6 (plasma-meta ou equivalente) é
+# pré-requisito, não instalado aqui: dele vêm kirigami, libplasma, layer-shell-qt, plasma5support, kscreen, kwin.
+# Formato: um pacote por linha; "# módulo" no fim diz quem precisa (o instalador pula os de módulo não escolhido).
+
+# --- shell (núcleo)
+quickshell
+qt6-declarative
+qt6-5compat              # Qt5Compat.GraphicalEffects
+qt6-multimedia           # papel de parede em vídeo, sons
+qt6-multimedia-ffmpeg    # backend FFmpeg (QT_MEDIA_BACKEND=ffmpeg no lowpan-shells.service)
+qt6-webengine            # papel de parede web, apps web da lateral
+qt6-shadertools          # qsb: shader do efeito de abrir/fechar do KWin nas janelas do shell (§21.24)
+syntax-highlighting      # org.kde.syntaxhighlighting
+jq
+wl-clipboard
+cliphist
+playerctl
+matugen                  # cores a partir do papel de parede
+libnotify                # notify-send
+libqalculate             # qalc: contas na busca
+imagemagick              # magick: miniaturas, recortes
+ffmpeg
+cava                     # visualizador de áudio
+socat
+curl
+xdg-user-dirs
+pacman-contrib           # checkupdates
+bluez-utils              # bluetoothctl
+networkmanager           # nmcli
+kitty                    # terminal do "Terminal" do menu e do inir terminal
+ttf-meslo-nerd           # fonte do kitty.conf do perfil (MesloLGS Nerd Font)
+zsh                      # shell do kitty.conf do perfil
+zsh-autosuggestions      # .zshrc do perfil
+zsh-syntax-highlighting  # .zshrc do perfil
+atuin                    # .zshrc do perfil (histórico)
+fastfetch                # .zshrc do perfil (no kitty)
+kate                     # editor (tema e opções vêm no perfil)
+konsole                  # lowpan-efeitos-kwin abre o rebuild no Konsole
+python
+python-dbus
+python-gobject
+python-pillow
+python-numpy             # scripts/colors e scripts/images
+python-tqdm              # scripts/thumbnails
+pyside6                  # install/atalhos-kde.py: "Meta+Q" → código do Qt (atalhos pessoais do perfil)
+yt-dlp                   # mídia (YtMusic, Anime)
+mpv
+deno                     # YtMusic
+starship                 # prompt do tema de terminal
+ttf-material-symbols-variable
+ttf-jetbrains-mono-nerd
+rsync
+# --- Plasma que o plasma-desktop (instalação mínima) não traz e o LowPan usa (VM limpa, 2026-11-22)
+kde-gtk-config           # cores do KDE para o GTK (~/.config/gtk-4.0/colors.css): o tema do Nautilus usa
+kscreen                  # página de telas nas Configurações do Sistema (resolução/monitores)
+xdg-desktop-portal-kde   # portais do KDE: gravação de tela pelo portal (record.sh), seletor de arquivos
+spectacle                # ferramenta de captura padrão (resposta "spectacle")
+kdeplasma-addons         # efeito Cubo (KWinCube.qml, atalho Meta+Tab do perfil)
+
+# --- tiling: nada a instalar — o motor vai compilado no projeto (shell/kwin-tiling/pkg, 2026-11-21).
+#     Só para recompilar (desenvolvimento): nodejs npm make
+
+# --- captura iNiR (pergunta "Ferramenta de captura")
+gpu-screen-recorder      # captura
+tesseract                # captura
+tesseract-data-eng       # captura
+tesseract-data-por       # captura (idioma do sistema: o instalador troca pelo do LANG)
+spectacle                # Spectacle: a outra opção de captura (já vem com o Plasma na maioria das instalações)
+
+# --- Nautilus (núcleo, 70-nautilus)
+nautilus
+git                      # baixa o GTK do MacTahoe (lowpan-nautilus-tema)
+
+# --- tela de login (pergunta "Tela de login": só com "iris")
+greetd                   # login-iris
+
+# --- magic lamp (pergunta "Magic Lamp")
+base-devel               # magic-lamp
+cmake                    # magic-lamp
+extra-cmake-modules      # magic-lamp
+
+# Usados pelo shell mas que NÃO estão nesta máquina (recurso parado aqui ou só no Niri/Hyprland); ficam de fora:
+# grim slurp swappy hyprpicker wtype ydotool brightnessctl easyeffects songrec translate-shell kdialog upscayl-bin
+# Nunca: ddcutil (§12 — o brilho é do PowerDevil; ddcutil detect já causou problema aqui).

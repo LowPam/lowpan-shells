@@ -1,0 +1,13 @@
+# LowPan Shells (§19.2 linha 40): app padrão de pastas — Nautilus com tema no LowPan, Dolphin no Plasma.
+# MODELO: o instalador (20-shell) gera ~/.local/share/applications/lowpan-files.desktop trocando @BIN@ pelo
+# ~/.local/bin da conta (um .desktop não expande $HOME; o link para cá deixava fixo o caminho de uma conta).
+[Desktop Entry]
+Type=Application
+Name=File manager (LowPan Shells)
+Name[pt_BR]=Gerenciador de arquivos (LowPan Shells)
+Name[pt]=Gerenciador de arquivos (LowPan Shells)
+Exec=@BIN@/lowpan-shells-files %U
+Icon=system-file-manager
+Terminal=false
+NoDisplay=true
+MimeType=inode/directory;

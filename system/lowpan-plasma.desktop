@@ -1,0 +1,6 @@
+[Desktop Entry]
+Exec=/usr/lib/lowpan-greeter/lowpan-sessao-plasma
+TryExec=/usr/lib/lowpan-greeter/lowpan-sessao-plasma
+DesktopNames=KDE
+Name=Plasma
+Comment=KDE Plasma (Wayland)

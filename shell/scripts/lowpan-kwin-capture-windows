@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+# LowPan Shells (§21.88): miniaturas das janelas no KWin para o WindowPreviewService (Órbita etc.).
+# No Niri as miniaturas vêm do `niri msg action screenshot-window` (capture-windows.sh); no KWin vêm do
+# org.kde.KWin.ScreenShot2.CaptureWindow, pelo UUID interno da janela (o mesmo que a kwin-bridge usa).
+# Não toca na área de transferência (o screenshot-window do Niri tocava; aqui não há o que limpar no cliphist).
+#
+# Uso: lowpan-kwin-capture-windows PASTA ID=UUID [ID=UUID ...]
+#   Grava PASTA/window-ID.png (via .window-ID.part.png + rename, para quem lê nunca abrir um PNG pela metade).
+#   A imagem é reduzida para no máximo MAX_SIDE px no lado maior (é miniatura).
+# Sai com 0 se todas saíram; 1 se faltou alguma (as outras ficam gravadas).
+import os
+import sys
+import threading
+
+import dbus
+from PIL import Image
+
+MAX_SIDE = 1280
+
+# QImage::Format -> (modo do PIL, modo cru)
+FORMATS = {
+    4: ("RGB", "BGRX"),     # RGB32
+    5: ("RGBA", "BGRA"),    # ARGB32
+    6: ("RGBA", "BGRa"),    # ARGB32_Premultiplied
+    13: ("RGB", "RGB"),     # RGB888
+    16: ("RGB", "RGBX"),    # RGBX8888
+    17: ("RGBA", "RGBA"),   # RGBA8888
+    18: ("RGBA", "RGBa"),   # RGBA8888_Premultiplied
+}
+
+
+def capture(iface, handle):
+    r, w = os.pipe()
+    chunks = []
+
+    def reader():
+        with os.fdopen(r, "rb") as f:
+            while True:
+                c = f.read(1 << 20)
+                if not c:
+                    break
+                chunks.append(c)
+
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+    opts = dbus.Dictionary({"include-cursor": False, "include-decoration": True, "include-shadow": False,
+                            "native-resolution": False}, signature="sv")
+    try:
+        fd = dbus.types.UnixFd(w)
+        meta = iface.CaptureWindow(handle, opts, fd, timeout=10)
+    finally:
+        # UnixFd guarda uma cópia do fd: sem fechar as duas pontas o leitor nunca vê o fim.
+        try:
+            os.close(fd.take())
+        except Exception:
+            pass
+        os.close(w)
+    t.join(10)
+    data = b"".join(chunks)
+    if str(meta.get("type", "raw")) != "raw":
+        raise RuntimeError("tipo de imagem inesperado: " + str(meta.get("type")))
+    width, height = int(meta["width"]), int(meta["height"])
+    stride, fmt = int(meta["stride"]), int(meta["format"])
+    if fmt not in FORMATS:
+        raise RuntimeError("formato QImage não suportado: %d" % fmt)
+    if len(data) < stride * height:
+        raise RuntimeError("imagem incompleta (%d de %d bytes)" % (len(data), stride * height))
+    mode, raw = FORMATS[fmt]
+    img = Image.frombuffer(mode, (width, height), data, "raw", raw, stride, 1)
+    if img.mode == "RGBA" and raw.endswith("a"):
+        img = img.convert("RGBA")  # desfaz o pré-multiplicado
+    scale = MAX_SIDE / max(width, height)
+    if scale < 1:
+        img = img.resize((max(1, round(width * scale)), max(1, round(height * scale))), Image.LANCZOS)
+    return img
+
+
+def main(argv):
+    if len(argv) < 2:
+        print("uso: lowpan-kwin-capture-windows PASTA ID=UUID [ID=UUID ...]", file=sys.stderr)
+        return 2
+    folder = argv[0]
+    os.makedirs(folder, exist_ok=True)
+    iface = dbus.Interface(
+        dbus.SessionBus().get_object("org.kde.KWin", "/org/kde/KWin/ScreenShot2"),
+        "org.kde.KWin.ScreenShot2")
+    failed = 0
+    for pair in argv[1:]:
+        wid, _, handle = pair.partition("=")
+        if not wid.isdigit() or not handle:
+            print("par inválido: " + pair, file=sys.stderr)
+            failed += 1
+            continue
+        tmp = os.path.join(folder, ".window-%s.part.png" % wid)
+        try:
+            capture(iface, handle).save(tmp, "PNG", compress_level=1)
+            os.replace(tmp, os.path.join(folder, "window-%s.png" % wid))
+        except (dbus.DBusException, RuntimeError, OSError) as e:
+            msg = e.get_dbus_message() if isinstance(e, dbus.DBusException) else str(e)
+            print("janela %s (%s): %s" % (wid, handle, msg), file=sys.stderr)
+            failed += 1
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

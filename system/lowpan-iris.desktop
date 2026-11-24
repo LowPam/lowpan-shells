@@ -1,0 +1,6 @@
+[Desktop Entry]
+Exec=/usr/lib/lowpan-greeter/lowpan-sessao-iris
+TryExec=/usr/lib/lowpan-greeter/lowpan-sessao-iris
+DesktopNames=KDE
+Name=LowPan
+Comment=LowPan Shells sobre o KDE Plasma (Wayland)

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LowPan Shells (2026-11-13): sem isto o readConfig de efeito JS só devolve o padrão. Targets é gravado pelo shell
+     (scripts/kwin-minimize-targets.py): ícone de cada app na dock, "c:<classe>=x,y,l,a;p:<pid>=x,y,l,a;…". -->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="">
+    <entry name="Targets" type="String">
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

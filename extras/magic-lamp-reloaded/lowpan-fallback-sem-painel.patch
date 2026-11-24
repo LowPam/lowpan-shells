@@ -1,0 +1,75 @@
+diff --git a/src/YetAnotherMagicLampEffect.cc b/src/YetAnotherMagicLampEffect.cc
+index eec3f88..a9e3862 100644
+--- a/src/YetAnotherMagicLampEffect.cc
++++ b/src/YetAnotherMagicLampEffect.cc
+@@ -69,6 +69,30 @@ static Direction dockEdge(KWin::EffectWindow* dock)
+ // Position is translated by the screen-origin offset so that an icon at local
+ // position (x, y) within the source panel maps to the same local position in
+ // the target panel — exact for identical panel layouts, reasonable otherwise.
++// LowPan Shells: sem o painel do Plasma ninguém publica iconGeometry (a dock do
++// Quickshell não tem set_minimized_geometry). Alvo: centro da borda de baixo da tela
++// da janela, onde fica a dock, com o tamanho de um ícone.
++static QRectF fallbackIconGeometry(KWin::EffectWindow* w)
++{
++    KWin::LogicalOutput* screen = KWin::effects->screenAt(w->frameGeometry().center().toPoint());
++    if (!screen) {
++        return QRectF();
++    }
++    const QRectF scr = KWinCompat::fullScreenArea(KWin::effects, screen);
++    constexpr qreal icon = 48;
++    return QRectF(scr.center().x() - icon / 2, scr.bottom() - icon - 6, icon, icon);
++}
++
++static bool hasPlasmaTaskbar()
++{
++    for (KWin::EffectWindow* c : KWin::effects->stackingOrder()) {
++        if (c->isDock() && c->windowClass().contains(QLatin1String("plasmashell"))) {
++            return true;
++        }
++    }
++    return false;
++}
++
+ static QRectF resolveIconGeometry(KWin::EffectWindow* w)
+ {
+     const QRectF iconRect = w->iconGeometry();
+@@ -453,6 +477,21 @@ void YetAnotherMagicLampEffect::startMinimize(KWin::EffectWindow* w)
+     }
+ 
+     const QRectF iconRect = w->iconGeometry();
++    if (!iconRect.isValid() && !hasPlasmaTaskbar()) {
++        const QRectF fallback = fallbackIconGeometry(w);
++        if (!fallback.isValid()) {
++            return;
++        }
++        AnimationData& animData = m_animations[w];
++        animData.model.setWindow(w);
++        animData.model.setParameters(m_modelParameters);
++        animData.model.setIconGeometry(fallback);
++        animData.model.start(Model::AnimationKind::Minimize);
++        animData.visibleRef = KWin::EffectWindowVisibleRef(w, KWin::EffectWindow::PAINT_DISABLED_BY_MINIMIZE);
++        redirect(w);
++        KWin::effects->addRepaintFull();
++        return;
++    }
+     if (!iconRect.isValid()) {
+         // On Wayland secondary screens the Plasma taskbar sets iconGeometry
+         // asynchronously (after QML layout). Keep the window visible and retry
+@@ -491,14 +530,15 @@ void YetAnotherMagicLampEffect::startUnminimize(KWin::EffectWindow* w)
+     }
+ 
+     const QRectF iconRect = w->iconGeometry();
+-    if (!iconRect.isValid()) {
++    const QRectF target = iconRect.isValid() ? resolveIconGeometry(w) : fallbackIconGeometry(w);
++    if (!target.isValid()) {
+         return;
+     }
+ 
+     AnimationData& animData = m_animations[w];
+     animData.model.setWindow(w);
+     animData.model.setParameters(m_modelParameters);
+-    animData.model.setIconGeometry(resolveIconGeometry(w));
++    animData.model.setIconGeometry(target);
+     animData.model.start(Model::AnimationKind::Unminimize);
+ 
+     redirect(w);

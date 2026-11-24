@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""LowPan Shells — cantos arredondados por ambiente (2026-11-22, pedido do dono).
+
+O LowPan usa o nosso Rounded Corners (pacote lowpan-kwin-rounded-corners, plugin kwin4_effect_lowpancorners, kwinrc
+[LowPan-Round-Corners]); o Plasma fica com o que a pessoa já tinha (o Rounded Corners original,
+kwin4_effect_shapecorners, de pacote do AUR ou instalado à mão) — ou nenhum. Os dois ficam instalados; muda só quem
+está ligado no kwinrc [Plugins]. Cada ambiente guarda o seu par de chaves: ao trocar, o par do ambiente que sai é
+guardado e o do que entra é aplicado. Estado: ~/.local/state/lowpan-shells/cantos-ambiente.json.
+
+  lowpan-cantos-ambiente cedo        no login, antes do KWin (só o kwinrc; system/lowpan-sessao-login)
+  lowpan-cantos-ambiente agora       no meio da sessão (troca LowPan↔Plasma do lowpan-shells-switch): kwinrc + reconfigure
+  lowpan-cantos-ambiente restaurar   o par do Plasma (o da pessoa) de volta e o estado apagado (desinstalar)
+  lowpan-cantos-ambiente status      mostra o ambiente, o estado guardado e as chaves agora
+
+Padrões: LowPan = o nosso ligado e o da pessoa desligado; Plasma = o par que a pessoa tinha na 1ª vez (o nosso sem chave,
+que vale desligado: o pacote vem com EnabledByDefault=false).
+"""
+import json
+import os
+import subprocess
+import sys
+
+HOME = os.path.expanduser("~")
+CFG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "lowpan-shells")
+STATE = os.path.join(STATE_DIR, "cantos-ambiente.json")
+PROJECT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+APAGAR = os.path.join(PROJECT, "install", "apagar-chave.py")
+
+NOSSO = "kwin4_effect_lowpancornersEnabled"
+DA_PESSOA = "kwin4_effect_shapecornersEnabled"
+CHAVES = [("Plugins", DA_PESSOA), ("Plugins", NOSSO)]
+PADRAO_IRIS = {DA_PESSOA: "false", NOSSO: "true"}
+
+
+def ambiente():
+    """iris/plasma: o marcador do login (o mesmo do lowpan-sessao-login); sem ele, o shell rodando."""
+    rt = os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
+    try:
+        with open(os.path.join(rt, "lowpan-sessao")) as f:
+            partes = f.read().split()
+        sid, minha = (partes[1] if len(partes) > 1 else ""), os.environ.get("XDG_SESSION_ID", "")
+        if partes and partes[0] in ("iris", "plasma") and not (sid and minha and sid != minha):
+            return partes[0]
+    except OSError:
+        pass
+    r = subprocess.run(["systemctl", "--user", "is-active", "-q", "lowpan-shells.service"])
+    return "iris" if r.returncode == 0 else "plasma"
+
+
+def ler(chave):
+    """Valor da chave no arquivo do usuário, ou None se ela não está lá (vale o padrão do efeito)."""
+    try:
+        with open(os.path.join(CFG, "kwinrc"), encoding="utf-8") as f:
+            dentro = False
+            for linha in f:
+                linha = linha.strip()
+                if linha.startswith("[") and linha.endswith("]"):
+                    dentro = linha == "[Plugins]"
+                elif dentro and linha.split("=", 1)[0] == chave and "=" in linha:
+                    return linha.split("=", 1)[1]
+    except OSError:
+        pass
+    return None
+
+
+def gravar(chave, valor):
+    if valor is None:
+        subprocess.run([sys.executable, "-I", APAGAR, os.path.join(CFG, "kwinrc"), "Plugins", chave])
+    else:
+        subprocess.run(["kwriteconfig6", "--file", "kwinrc", "--group", "Plugins", "--key", chave, valor])
+
+
+def recarregar(par):
+    """Liga/desliga os efeitos na sessão: o reconfigure do KWin 6.8 relê os ajustes mas não carrega nem descarrega
+    plugins pelo [Plugins] (testado 2026-11-22). Efeitos em C++: unloadEffect é seguro aqui."""
+    for _g, k in CHAVES:
+        efeito = k[:-len("Enabled")]
+        ligado = par.get(k) == "true"
+        subprocess.run(["qdbus6", "org.kde.KWin", "/Effects", "org.kde.kwin.Effects." +
+                        ("loadEffect" if ligado else "unloadEffect"), efeito], capture_output=True)
+    subprocess.run(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], capture_output=True)
+
+
+def par_atual():
+    return {k: ler(k) for _g, k in CHAVES}
+
+
+def carregar():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def salvar(st):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=1)
+    os.replace(tmp, STATE)
+
+
+def nosso_instalado():
+    if os.environ.get("LOWPAN_CANTOS_TESTE") == "1":   # testes numa HOME falsa
+        return True
+    return subprocess.run(["pacman", "-Q", "lowpan-kwin-rounded-corners"], capture_output=True).returncode == 0
+
+
+def aplicar(par):
+    mudou = False
+    for _g, k in CHAVES:
+        if ler(k) != par.get(k):
+            gravar(k, par.get(k))
+            mudou = True
+    return mudou
+
+
+def trocar(reconfigurar):
+    if not nosso_instalado():
+        return 0
+    st = carregar()
+    agora_amb = ambiente()
+    ultimo = st.get("ultimo")
+    if ultimo == agora_amb:
+        if reconfigurar:                    # mesmo ambiente: só alinha o que está carregado com o kwinrc
+            recarregar(par_atual())
+        return 0
+    if ultimo:
+        st[ultimo] = par_atual()            # o ambiente que sai guarda o par dele
+    else:
+        st.setdefault("plasma", par_atual())  # 1ª vez: o que está aí é o da pessoa
+        st["plasma"][NOSSO] = None
+    par = st.get(agora_amb) or (dict(PADRAO_IRIS) if agora_amb == "iris" else st["plasma"])
+    mudou = aplicar(par)
+    st["ultimo"] = agora_amb
+    salvar(st)
+    if reconfigurar:
+        recarregar(par)
+    print("%s: %s" % (agora_amb, ", ".join("%s=%s" % (k, par.get(k)) for _g, k in CHAVES)))
+    return 0
+
+
+def restaurar():
+    st = carregar()
+    if "plasma" in st:
+        aplicar(st["plasma"])
+        recarregar(st["plasma"])
+    try:
+        os.remove(STATE)
+    except OSError:
+        pass
+    return 0
+
+
+def status():
+    st = carregar()
+    print("ambiente: %s · último aplicado: %s · nosso instalado: %s" % (
+        ambiente(), st.get("ultimo") or "-", "sim" if nosso_instalado() else "não"))
+    for amb in ("iris", "plasma"):
+        if amb in st:
+            print("  guardado %-6s %s" % (amb + ":", st[amb]))
+    print("  agora:         %s" % par_atual())
+    return 0
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "cedo":
+        return trocar(False)
+    if cmd == "agora":
+        return trocar(True)
+    if cmd == "restaurar":
+        return restaurar()
+    if cmd == "status":
+        return status()
+    print(__doc__, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

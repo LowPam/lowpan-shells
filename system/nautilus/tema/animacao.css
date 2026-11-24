@@ -1,0 +1,11 @@
+/* LowPan Shells — teste de transição ao abrir pasta (2026-11-13): os itens entram deslizando a partir da barra
+   lateral (esquerda → direita) com fade. Só CSS: não sabe a direção (abrir/voltar), então é igual nos dois
+   sentidos. Desfazer = apagar o @import "animacao.css" do gtk.css e do gtk-dark.css. */
+@keyframes lowpan-entrar {
+  from { transform: translateX(-48px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.nautilus-window gridview > child,
+.nautilus-window columnview > listview > row {
+  animation: lowpan-entrar 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}

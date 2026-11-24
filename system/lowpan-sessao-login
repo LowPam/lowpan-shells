@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# LowPan Shells — login com marcador de sessão (§21.72). Roda no lowpan-theme-login.service, antes do KWin.
+#   marcador iris   → a escolha do login manda: sobe o LowPan (--no-block) mesmo desabilitado e sai;
+#                     o perfil "own" é pedido pelo próprio shell ao subir (shell/services/ThemeProfile.qml).
+#   marcador plasma → se o plasmashell estiver mascarado (resto de um "on"), desfaz: unmask dele + disable do
+#                     lowpan-shells (equivale a um "off" de login, sem parar/subir nada — o plasmashell sobe
+#                     pelo alvo normal); depois troca para o perfil "plasma".
+#   sem marcador    → como antes (§21.64): se o LowPan está habilitado ("on"), sai; senão troca para "plasma".
+# Marcador: "$XDG_RUNTIME_DIR/lowpan-sessao" com "iris|plasma [<XDG_SESSION_ID>]"; id de outra sessão
+# logind (logout com o diretório sobrevivendo) vale como sem marcador; id vazio dos dois lados aceita.
+set -u
+SC=(systemctl --user)
+PROJETO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+PERFIL="$PROJETO/../shell/scripts/lowpan-theme-profile"
+UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/lowpan-shells.service"
+
+# Imprime "iris"/"plasma" se o marcador é válido para ESTA sessão logind; nada caso contrário.
+sessao_atual() {
+    local marcador="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/lowpan-sessao" s id
+    [[ -f "$marcador" ]] || return 0
+    read -r s id < "$marcador" || return 0
+    case "$s" in iris|plasma) ;; *) return 0 ;; esac
+    [[ -n "${id:-}" && -n "${XDG_SESSION_ID:-}" && "$id" != "$XDG_SESSION_ID" ]] && return 0
+    printf '%s' "$s"
+}
+
+# Tiling por ambiente (2026-11-22): o interruptor do motor já fica certo antes do KWin subir (sem um instante de colunas
+# no Plasma); teclas e botões vêm depois do KWin, no lowpan-tiling-sessao.service.
+[[ -x "$PROJETO/lowpan-shells-tiling" ]] && timeout 10 "$PROJETO/lowpan-shells-tiling" sessao --cedo >/dev/null 2>&1 || true
+# cantos arredondados por ambiente (o nosso no LowPan, o da pessoa no Plasma): só o kwinrc, antes do KWin ler
+[[ -x "$PROJETO/lowpan-cantos-ambiente" ]] && timeout 10 "$PROJETO/lowpan-cantos-ambiente" cedo >/dev/null 2>&1 || true
+
+case "$(sessao_atual)" in
+    iris)
+        # desinstalado pelo install.sh: não sobe nem recria a unit (a sessão "LowPan" vira um Plasma normal)
+        [[ -f "${XDG_STATE_HOME:-$HOME/.local/state}/lowpan-shells/install/desinstalado" ]] && exit 0
+        # Entrada com fade: o LowPan cobre a tela de preto e desfaz no primeiro quadro só quando acha este aviso
+        # (num reinício do shell no meio da sessão não há fade). Ele apaga o arquivo ao usar (§21.72).
+        [[ -n "${XDG_RUNTIME_DIR:-}" ]] && : > "$XDG_RUNTIME_DIR/lowpan-entrada" || true
+        # Autorreparo: sem a unit (link para o projeto) o start falha e a tela fica preta (2026-11-15).
+        if [[ ! -e "$UNIT" ]]; then
+            ln -sfn "$PROJETO/lowpan-shells.service" "$UNIT" && "${SC[@]}" daemon-reload || true
+        fi
+        "${SC[@]}" --no-block start lowpan-shells.service || true
+        exit 0
+        ;;
+    plasma)
+        if [[ "$("${SC[@]}" is-enabled plasma-plasmashell.service 2>/dev/null)" == "masked" ]]; then
+            "${SC[@]}" unmask plasma-plasmashell.service || true
+            # Sem `disable`: ele apagava o link da unit junto (ver o ramo iris). Só sai a ativação.
+            rm -f "${UNIT%/*}"/*.wants/lowpan-shells.service
+            "${SC[@]}" daemon-reload || true
+        fi
+        ;;
+    *)
+        "${SC[@]}" -q is-enabled lowpan-shells.service 2>/dev/null && exit 0
+        ;;
+esac
+exec timeout 30 "$PERFIL" switch plasma

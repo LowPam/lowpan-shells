@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# LowPan Shells — atalhos globais registrados no KDE (kglobalaccel).
+#
+#   lowpan-shells-shortcuts install   cria os .desktop e registra as teclas
+#   lowpan-shells-shortcuts remove    remove tudo
+#   lowpan-shells-shortcuts list      mostra a tabela
+#   lowpan-shells-shortcuts check     confere sem mexer (sai 1 se faltar alguma tecla)
+#
+# Cada atalho vira um .desktop "lowpan-shells-<id>.desktop" em ~/.local/share/applications com
+# X-KDE-Shortcuts; aparece em Configurações do Sistema › Atalhos e pode ser trocado por lá.
+# Sem o LowPan Shells rodando, os de IPC simplesmente não fazem nada.
+set -euo pipefail
+
+# Idioma: o do sistema (inglês por padrão; português em sistema pt), como o shell com o idioma em "auto".
+# Os nomes dos atalhos vão nos dois idiomas no .desktop (Name= e Name[pt_BR]=): o KDE escolhe sozinho.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in pt*) LP_PT=1 ;; *) LP_PT=0 ;; esac
+t() { if [[ $LP_PT == 1 ]]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+
+APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+QS=/usr/bin/qs
+IPC="$QS -c lowpan-shells ipc call"
+
+META=$((0x10000000)); SHIFT=$((0x02000000)); CTRL=$((0x04000000)); ALT=$((0x08000000))
+
+# id | tecla (texto) | código Qt | nome em inglês~nome em português | comando [| tomar de: componente/ação/nome do componente/nome da ação]
+# O 6º campo tira a tecla de outro dono no install e devolve no remove; o 7º (opcional) são as outras teclas
+# daquela ação que ficam com o dono (ex.: o + do teclado numérico continua com o volume do KDE).
+SHORTCUTS=(
+    "launcher|Meta+Space|$((META|0x20))|Launcher (app palette)~Launcher (paleta de apps)|$IPC overview toggle"
+    "control|Meta+A|$((META|0x41))|Control center~Central de controle|$IPC iris controlCenter toggle"
+    "today|Meta+N|$((META|0x4e))|Today (calendar and notifications)~Hoje (agenda e notificações)|$IPC iris today toggle"
+    "island|Meta+S|$((META|0x53))|Open the Island~Abrir a ilha|$IPC iris toggle"
+    "settings|Meta+O|$((META|0x4f))|LowPan Shells settings~Configurações do LowPan Shells|$IPC settings toggle"
+    "wallpaper|Meta+Shift+W|$((META|SHIFT|0x57))|Wallpaper picker~Seletor de papel de parede|$IPC wallpaperSelector toggle"
+    "session|Meta+Shift+Q|$((META|SHIFT|0x51))|Power and session menu~Menu de energia e sessão|$IPC session toggle"
+    # Emergência (2026-11-20, §22.4): para o shell e devolve o plasmashell; funciona até com o shell travado.
+    "emergency|Meta+Ctrl+Alt+P|$((META|CTRL|ALT|0x50))|Back to Plasma (emergency)~Voltar ao Plasma (emergência)|$HOME/.local/bin/lowpan-voltar-plasma"
+    "restart|Meta+Ctrl+Alt+R|$((META|CTRL|ALT|0x52))|Restart LowPan Shells~Reiniciar o LowPan Shells|/usr/bin/systemctl --user restart lowpan-shells.service"
+    # Meta+V nos dois modos: o script abre o histórico do LowPan Shells ou, no Plasma normal, o menu do Klipper.
+    "clipboard|Meta+V|$((META|0x56))|Clipboard~Área de transferência|$HOME/.local/bin/lowpan-shells-clipboard|plasmashell/show-on-mouse-pos/plasmashell/Mostrar itens da área de transferência na posição do mouse"
+    # Meta+E nos dois modos (2026-11-12): no LowPan abre o Nautilus, no Plasma normal o Dolphin (lowpan-shells-files).
+    "files|Meta+E|$((META|0x45))|File manager~Gerenciador de arquivos|$HOME/.local/bin/lowpan-shells-files|org.kde.dolphin.desktop/_launch/Dolphin/Dolphin"
+    # Teclas de volume do teclado (2026-11-07): com o LowPan ativo o shell muda o volume e a Ilha mostra a barra;
+    # no Plasma normal o script chama a ação original do KDE (lowpan-shells-volume).
+    "volume-up|Volume Up|$((0x1000072))|Volume up~Aumentar volume|$HOME/.local/bin/lowpan-shells-volume up|kmix/increase_volume/Volume do áudio/Aumentar volume|$((0x2000002b))"
+    "volume-down|Volume Down|$((0x1000070))|Volume down~Diminuir volume|$HOME/.local/bin/lowpan-shells-volume down|kmix/decrease_volume/Volume do áudio/Diminuir volume|$((0x2000002d))"
+    "volume-mute|Volume Mute|$((0x1000071))|Mute~Silenciar|$HOME/.local/bin/lowpan-shells-volume mute|kmix/mute/Volume do áudio/Silenciar|"
+    "mic-mute|Microphone Mute|$((0x1000113))|Mute the microphone~Silenciar o microfone|$HOME/.local/bin/lowpan-shells-volume mic|kmix/mic_mute/Volume do áudio/Silenciar microfone|$((0x11000071))"
+    # Já cobertos pelo KDE: Meta+Shift+S (Spectacle), Meta+Esc (Monitor do sistema), Meta+, (Krohnkite).
+    # Meta+1..9 ficam com o plasmashell até o modo "on".
+)
+
+kga() { busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel "$@"; }
+
+# Tecla que numa conta nova é do plasmashell (2026-11-21, teste do instalador: Meta+A vinha de um "activate widget N"
+# do painel padrão, cujo número muda de máquina para máquina). A ação dona é descoberta na hora, perde só esta tecla,
+# e fica guardada para o remove devolver. O plasmashell não roda no LowPan; no Plasma a ação fica sem a tecla.
+TOMADOS="${XDG_STATE_HOME:-$HOME/.local/state}/lowpan-shells/atalhos-tomados.tsv"
+tomar_do_plasmashell() {   # código-Qt → 0 se tomou
+    local code="$1" json comp act cfn afn teclas resto
+    json="$(busctl --user --json=short call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel action i "$code" 2>/dev/null)" || return 1
+    IFS=$'\t' read -r comp act cfn afn < <(python3 -I -c 'import json,sys; print("\t".join(json.loads(sys.argv[1])["data"][0]))' "$json") || return 1
+    [[ "$comp" == plasmashell && -n "$act" ]] || return 1
+    teclas="$(busctl --user --json=short call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel shortcut as 4 "$comp" "$act" "$cfn" "$afn" 2>/dev/null \
+        | python3 -I -c 'import json,sys; print(" ".join(str(k) for k in json.load(sys.stdin)["data"][0] if k))')"
+    resto="$(for k in $teclas; do if [[ "$k" != "$code" ]]; then printf '%s ' "$k"; fi; done)"
+    mkdir -p "$(dirname "$TOMADOS")"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$code" "$comp" "$act" "$cfn" "$afn" "$teclas" >> "$TOMADOS"
+    # shellcheck disable=SC2086
+    kga setShortcut asaiu 4 "$comp" "$act" "$cfn" "$afn" "$(wc -w <<< "$resto")" $resto 4 >/dev/null
+    echo "$(t "taken   $(printf '%s' "$afn") from plasmashell" "tomado  de \"plasmashell\" ($afn)")"
+}
+devolver_ao_plasmashell() {
+    [[ -f "$TOMADOS" ]] || return 0
+    local code comp act cfn afn teclas
+    while IFS=$'\t' read -r code comp act cfn afn teclas; do
+        # shellcheck disable=SC2086
+        kga setShortcut asaiu 4 "$comp" "$act" "$cfn" "$afn" "$(wc -w <<< "$teclas")" $teclas 4 >/dev/null 2>&1 \
+            && echo "$(t "given back to plasmashell" "devolvido ao \"plasmashell\""): $afn"
+    done < "$TOMADOS"
+    rm -f "$TOMADOS"
+}
+
+# Tecla Super sozinha (2026-11-09, §21.39): no Plasma ela abre o Kickoff (plasmashell, que não roda no modo LowPan).
+# Aqui ela chama a mesma ação do Meta+Space (lançador). O remove apaga a chave → volta o padrão do KDE.
+META_ALONE="org.kde.kglobalaccel,/component/lowpan_shells_launcher_desktop,org.kde.kglobalaccel.Component,invokeShortcut,_launch"
+meta_alone_set() {
+    local cur; cur="$(kreadconfig6 --file kwinrc --group ModifierOnlyShortcuts --key Meta 2>/dev/null)"
+    if [[ -n "$cur" && "$cur" != "$META_ALONE" ]]; then
+        echo "$(t "SKIPPED Meta alone: already set to \"$cur\"" "PULADO  Meta sozinha: já configurada (\"$cur\")")"
+        return
+    fi
+    kwriteconfig6 --file kwinrc --group ModifierOnlyShortcuts --key Meta "$META_ALONE"
+    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+    echo "$(t "ok      Meta (alone) → launcher" "ok      Meta (sozinha) → lançador")"
+}
+meta_alone_unset() {
+    [[ "$(kreadconfig6 --file kwinrc --group ModifierOnlyShortcuts --key Meta 2>/dev/null)" == "$META_ALONE" ]] || return 0
+    # sem --delete: com o valor também nos padrões do sistema ele grava "Meta[$d]" e esconde o padrão (Kickoff)
+    python3 -I "$(dirname "$(readlink -f "$0")")/../install/apagar-chave.py" "${XDG_CONFIG_HOME:-$HOME/.config}/kwinrc" ModifierOnlyShortcuts Meta
+    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+    echo "$(t "given back Meta (alone) to the KDE default" "devolvida a Meta (sozinha) ao padrão do KDE")"
+}
+
+install_all() {
+    mkdir -p "$APPS"
+    local entry id key code name name_en name_pt cmd steal keep file owner comp act cfn afn
+    for entry in "${SHORTCUTS[@]}"; do
+        IFS='|' read -r id key code name cmd steal keep <<< "$entry"
+        name_en="${name%%~*}"; name_pt="${name#*~}"; name="$(t "$name_en" "$name_pt")"
+        file="lowpan-shells-$id.desktop"
+        owner="$(kga action i "$code" 2>/dev/null | awk '{print $3}' | tr -d '"')"
+        if [[ -n "$steal" && "$owner" == "${steal%%/*}" ]]; then
+            IFS='/' read -r comp act cfn afn <<< "$steal"
+            # flag 4 = NoAutoloading: grava "sem tecla" para a ação do outro dono
+            if [[ -n "$keep" ]]; then
+                kga setShortcut asaiu 4 "$comp" "$act" "$cfn" "$afn" 1 "$keep" 4 >/dev/null
+            else
+                kga setShortcut asaiu 4 "$comp" "$act" "$cfn" "$afn" 0 4 >/dev/null
+            fi
+            echo "$(t "taken   $key from \"$comp\" ($afn)" "tomado  $key de \"$comp\" ($afn)")"
+            owner=""
+        fi
+        if [[ "$owner" == plasmashell ]] && tomar_do_plasmashell "$code"; then owner=""; fi
+        if [[ -n "$owner" && "$owner" != "$file" ]]; then
+            echo "$(t "SKIPPED $key ($name): already belongs to \"$owner\"" "PULADO  $key ($name): já é de \"$owner\"")"
+            continue
+        fi
+        cat > "$APPS/$file" <<EOF
+[Desktop Entry]
+Type=Application
+Name=LowPan Shells — $name_en
+Name[pt_BR]=LowPan Shells — $name_pt
+Name[pt]=LowPan Shells — $name_pt
+Exec=$cmd
+Icon=preferences-desktop-keyboard-shortcut
+Terminal=false
+NoDisplay=true
+X-KDE-Shortcuts=$key
+EOF
+        kga doRegister as 4 "$file" _launch "LowPan Shells — $name" "LowPan Shells — $name" >/dev/null
+        # flag 2 = SetPresent: sem ele a ação fica inativa e o KWin não escuta a tecla
+        kga setShortcut asaiu 4 "$file" _launch "LowPan Shells — $name" "LowPan Shells — $name" 1 "$code" 2 >/dev/null
+        echo "ok      $key → $name"
+    done
+    kbuildsycoca6 >/dev/null 2>&1 || true
+    [[ -z "${LP_SECOND_PASS:-}" ]] && meta_alone_set
+    # Na primeira instalação o kglobalaccel às vezes ainda não liga a tecla a uma ação recém-criada (visto com as
+    # teclas de volume em 2026-11-07); uma segunda passada, com tudo já registrado, resolve.
+    if [[ -z "${LP_SECOND_PASS:-}" ]]; then LP_SECOND_PASS=1 install_all >/dev/null; fi
+}
+
+remove_all() {
+    local entry id key code name cmd steal keep file comp act cfn afn
+    for entry in "${SHORTCUTS[@]}"; do
+        IFS='|' read -r id key code name cmd steal keep <<< "$entry"
+        name="$(t "${name%%~*}" "${name#*~}")"
+        file="lowpan-shells-$id.desktop"
+        kga unregister ss "$file" _launch >/dev/null 2>&1 || true
+        if [[ -n "$steal" ]]; then
+            IFS='/' read -r comp act cfn afn <<< "$steal"
+            if [[ -n "$keep" ]]; then set -- 2 "$code" "$keep"; else set -- 1 "$code"; fi
+            kga setShortcut asaiu 4 "$comp" "$act" "$cfn" "$afn" "$@" 4 >/dev/null 2>&1 \
+                && echo "$(t "given back $key to \"$comp\"" "devolvido $key a \"$comp\"")"
+        fi
+        rm -f "$APPS/$file"
+        echo "$(t "removed $key ($name)" "removido $key ($name)")"
+    done
+    meta_alone_unset
+    devolver_ao_plasmashell
+    kbuildsycoca6 >/dev/null 2>&1 || true
+}
+
+# Confere sem mexer (2026-11-20, install.sh plano): cada tecla é do nosso .desktop? Sai 1 se faltar alguma.
+check_all() {
+    local entry id key code name cmd steal keep file owner falta=0
+    for entry in "${SHORTCUTS[@]}"; do
+        IFS='|' read -r id key code name cmd steal keep <<< "$entry"
+        file="lowpan-shells-$id.desktop"
+        owner="$(kga action i "$code" 2>/dev/null | awk '{print $3}' | tr -d '"')"
+        if [[ "$owner" == "$file" && -f "$APPS/$file" ]]; then echo "ok    $key"; else echo "falta $key (${owner:-sem dono})"; falta=1; fi
+    done
+    if [[ "$(kreadconfig6 --file kwinrc --group ModifierOnlyShortcuts --key Meta 2>/dev/null)" == "$META_ALONE" ]]; then
+        echo "ok    Meta"; else echo "falta Meta (sozinha)"; falta=1; fi
+    return $falta
+}
+
+list_all() {
+    local entry id key code name cmd steal keep
+    for entry in "${SHORTCUTS[@]}"; do
+        IFS='|' read -r id key code name cmd steal keep <<< "$entry"
+        name="$(t "${name%%~*}" "${name#*~}")"
+        printf '%-14s %s\n' "$key" "$name"
+    done
+}
+
+case "${1:-list}" in
+    install) install_all ;;
+    remove) remove_all ;;
+    list) list_all ;;
+    check) check_all ;;
+    *) echo "$(t usage uso): $(basename "$0") install|remove|list|check" >&2; exit 2 ;;
+esac

@@ -1,0 +1,14 @@
+# LowPan Shells
+__pycache__/
+*.pyc
+*.qmlc
+*.jsc
+.cache/
+# dependências do npm: só servem para recompilar o motor do tiling (shell/kwin-tiling/pkg já vai compilado)
+shell/kwin-tiling/node_modules/
+# papéis de parede de perfis locais
+install/perfis/*/papeis/
+# pacotes compilados pelo instalador (makepkg)
+extras/**/*.pkg.tar.zst
+extras/**/src/
+extras/**/pkg/

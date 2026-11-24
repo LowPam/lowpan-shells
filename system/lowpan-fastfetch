@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""LowPan Shells — fastfetch com as caixas (╭───╮ / ╰───╯) do tamanho do terminal (2026-11-22).
+
+As linhas das caixas são texto fixo no ~/.config/fastfetch/config.jsonc (71 colunas): num terminal estreito elas
+passavam da borda. Este script mede o terminal, gera uma cópia da configuração com as linhas encolhidas (os ícones do
+topo continuam centralizados) e chama o fastfetch com ela. Nunca passa do tamanho original: num terminal largo o
+resultado é idêntico ao fastfetch direto. Argumentos extras vão para o fastfetch.
+"""
+import os
+import re
+import shutil
+import sys
+from pathlib import Path
+
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fastfetch" / "config.jsonc"
+CACHE = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "lowpan-fastfetch"
+MIN = 24          # menor caixa que ainda faz sentido
+FOLGA = 3         # colunas livres à direita da caixa (e o espaço que o fastfetch põe antes dela)
+
+# "format": "<cor>╭───<meio>───╮"   e   "format": "<cor>╰───╯"
+TOPO = re.compile(r'("format":\s*"(?:\\u001b\[[0-9;]*m)*)╭(─+)(.*?)(─+)╮')
+BASE = re.compile(r'("format":\s*"(?:\\u001b\[[0-9;]*m)*)╰(─+)╯')
+
+
+def largura_logo(texto):
+    """Colunas ocupadas à esquerda das caixas: padding.left + width + padding.right do logo (+1 de separação)."""
+    i = texto.find('"logo"')
+    if i < 0:
+        return 0
+    j = texto.find("{", i)
+    nivel, k = 0, j
+    for k in range(j, len(texto)):   # o bloco do logo inteiro (o "padding" dentro dele também tem chaves)
+        nivel += {"{": 1, "}": -1}.get(texto[k], 0)
+        if nivel == 0:
+            break
+    b = texto[j:k + 1]
+    if re.search(r'"type"\s*:\s*"none"', b):
+        return 0
+
+    def num(chave, padrao=0):
+        m = re.search(r'"%s"\s*:\s*(\d+)' % chave, b)
+        return int(m.group(1)) if m else padrao
+    # sem "right" no padding o fastfetch põe 4 colunas depois do logo (as caixas começavam na coluna 30, não 27)
+    return num("left") + num("width") + num("right", 4)
+
+
+def main():
+    ff = shutil.which("fastfetch")
+    if not ff:
+        return 0
+    if not CFG.is_file():
+        os.execv(ff, [ff, *sys.argv[1:]])
+    texto = CFG.read_text(encoding="utf-8")
+    try:
+        cols = os.get_terminal_size(sys.stdout.fileno()).columns
+    except OSError:
+        cols = int(os.environ.get("COLUMNS", "200"))
+    original = max((len(m.group(2)) + len(m.group(3)) + len(m.group(4)) + 2 for m in TOPO.finditer(texto)),
+                   default=0)
+    original = max(original, max((len(m.group(2)) + 2 for m in BASE.finditer(texto)), default=0))
+    if not original:
+        os.execv(ff, [ff, *sys.argv[1:]])
+    caixa = max(MIN, min(original, cols - largura_logo(texto) - FOLGA))
+    if caixa >= original:   # cabe inteira: igual ao fastfetch direto
+        os.execv(ff, [ff, *sys.argv[1:]])
+
+    def topo(m):
+        meio = m.group(3)
+        resto = caixa - 2 - len(meio)
+        if resto < 2:   # nem os ícones cabem: só a linha
+            meio, resto = "", caixa - 2
+        esq = resto // 2
+        return f"{m.group(1)}╭{'─' * esq}{meio}{'─' * (resto - esq)}╮"
+
+    novo = BASE.sub(lambda m: f"{m.group(1)}╰{'─' * (caixa - 2)}╯", TOPO.sub(topo, texto))
+    CACHE.mkdir(parents=True, exist_ok=True)
+    alvo = CACHE / f"config-{caixa}.jsonc"
+    if not alvo.is_file() or alvo.read_text(encoding="utf-8") != novo:
+        alvo.write_text(novo, encoding="utf-8")
+    os.execv(ff, [ff, "--config", str(alvo), *sys.argv[1:]])
+
+
+if __name__ == "__main__":
+    sys.exit(main())

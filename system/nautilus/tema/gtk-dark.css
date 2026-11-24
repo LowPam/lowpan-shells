@@ -1,0 +1,56 @@
+/* LowPan Shells: variação do MacTahoe Liquid só para o Nautilus do LowPan (2026-11-11).
+   O tema desenha a lateral como cartão, mas transparente (no GNOME a janela é translúcida); aqui ele ganha cor
+   própria. Cantos menores que os do tema (janela 16 px, cartão 10 px = 16 − 6 de margem) e borda mais visível
+   (a de 10% do tema some no fundo escuro; a que o usuário via vinha do Rounded Corners, que exclui o Nautilus).
+   Depois de mudar este arquivo: nautilus -q (o processo em segundo plano guarda o CSS antigo). */
+@import url("base-dark.css");
+/* Tons do esquema de cores do KDE (os mesmos do Qt), 2026-11-14 */
+@import url("cores-breeze.css");
+/* Sombra = a do Breeze no KWin (Configurações › Janelas › Decoração), gerada por kwin-decoration.py */
+@import url("sombra.css");
+/* Transição ao abrir pasta (teste, 2026-11-13) */
+@import url("animacao.css");
+
+:root { --window-radius: 16px; }
+
+window.csd {
+  border-radius: 16px;
+  outline: 1px solid rgba(255, 255, 255, 0.3);
+  outline-offset: -1px;
+}
+
+/* Sem foco: o tema base vem sem as regras :backdrop (base*.css, gerado por ../gerar-sem-backdrop.py), então a
+   janela não muda de tom; só a borda fica mais apagada, como nas outras janelas (2026-11-12). */
+window.csd:backdrop {
+  outline-color: rgba(255, 255, 255, 0.12);
+}
+
+.nautilus-window .sidebar-pane,
+.nautilus-window .sidebar-pane:backdrop {
+  background-color: @theme_bg_color_breeze; /* era #2a2a30; = janela do Breeze (#202326), igual ao Dolphin */
+  border-radius: 10px;
+}
+
+/* Voltar/avançar: cápsula mais fina (o tema usa 3 px em volta e botões de 24 px + 3 px). */
+.nautilus-window headerbar > windowhandle > box > widget > box.start > stack > widget > box,
+.nautilus-window headerbar > windowhandle > box > widget > box.start > box > stack > widget > box {
+  padding: 1px 2px;
+  border-spacing: 2px;
+  /* A caixa estica na altura da barra (só os botões são centralizados): 46 px contra 36 px da cápsula
+     da direita (Ícones/Lista). 5 px em cima e embaixo deixam as duas iguais (2026-11-12). */
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+.nautilus-window headerbar > windowhandle > box > widget > box.start > stack > widget > box > button,
+.nautilus-window headerbar > windowhandle > box > widget > box.start > box > stack > widget > box > button {
+  min-height: 20px;
+  min-width: 20px;
+  padding: 2px 4px;
+}
+
+/* Fonte SF Pro Text só no Nautilus do LowPan (2026-11-12; §19.2 linha 38) — o resto do sistema segue com a
+   Noto Sans. Vale para todas as janelas do processo (diálogos e menus herdam). */
+window {
+  font-family: "SF Pro Text";
+  font-size: 10pt;
+}

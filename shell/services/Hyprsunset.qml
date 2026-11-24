@@ -1,0 +1,338 @@
+pragma Singleton
+
+import QtQuick
+import qs.modules.common
+import Quickshell
+import Quickshell.Io
+import Quickshell.Hyprland
+import qs.services
+
+/**
+ * Night light service with automatic mode.
+ * Uses hyprsunset on Hyprland, wlsunset on Niri, KWin's own Night Light on Plasma (LowPan Shells).
+ */
+Singleton {
+    id: root
+    property string from: Config.options?.light?.night?.from ?? "19:00" 
+    property string to: Config.options?.light?.night?.to ?? "06:30"
+    property bool automatic: Config.options?.light?.night?.automatic && (Config?.ready ?? true)
+    property bool manualEnabled: Config.options?.light?.night?.enabled ?? false
+    property int colorTemperature: Config.options?.light?.night?.colorTemperature ?? 5000
+    property bool shouldBeOn
+    property bool firstEvaluation: true
+    property bool active: false
+
+    property int fromHour: Number(from.split(":")[0])
+    property int fromMinute: Number(from.split(":")[1])
+    property int toHour: Number(to.split(":")[0])
+    property int toMinute: Number(to.split(":")[1])
+
+    property int clockHour: DateTime.clock.hours
+    property int clockMinute: DateTime.clock.minutes
+
+    property var manualActive
+    property int manualActiveHour
+    property int manualActiveMinute
+    // LowPan Shells (§21.86): quando a escolha manual foi feita (ms). Ela vale até passar uma virada do horário (de ou
+    // até) depois desse momento — antes comparava só hora:minuto, e (a) reiniciar o shell perdia a escolha (a luz
+    // religava sozinha) e (b) reavaliar no mesmo minuto do clique apagava a escolha (inBetween com de == até).
+    property real manualAt: 0
+    property bool _manualRestored: false
+
+    function _boundaryCrossed(atMs, nowMs) {
+        for (const minutes of [fromHour * 60 + fromMinute, toHour * 60 + toMinute]) {
+            const next = new Date(atMs);
+            next.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+            if (next.getTime() <= atMs) next.setDate(next.getDate() + 1);
+            if (next.getTime() <= nowMs) return true;
+        }
+        return false;
+    }
+    function _saveManual() {
+        if (!Persistent.ready) return;
+        Persistent.states.nightLight.manual = root.manualActive === undefined ? -1 : (root.manualActive ? 1 : 0);
+        Persistent.states.nightLight.at = root.manualActive === undefined ? 0 : root.manualAt;
+    }
+    function _restoreManual() {
+        if (root._manualRestored || !Persistent.ready) return;
+        root._manualRestored = true;
+        const saved = Number(Persistent.states?.nightLight?.manual ?? -1);
+        const at = Number(Persistent.states?.nightLight?.at ?? 0);
+        if (saved < 0 || at <= 0) return;
+        if (root._boundaryCrossed(at, Date.now())) { Persistent.states.nightLight.manual = -1; return; }
+        root.manualActive = saved === 1;
+        root.manualAt = at;
+    }
+    Connections {
+        target: Persistent
+        function onReadyChanged() {
+            if (!Persistent.ready || root.firstEvaluation) return;
+            const before = root.manualActive;
+            root._restoreManual();
+            if (root.manualActive !== before && root.manualActive !== undefined) {
+                if (root.manualActive) root.enable(); else root.disable();
+            }
+        }
+    }
+
+    // Debounce timer for wlsunset restarts
+    property bool _pendingRestart: false
+    Timer {
+        id: restartDebounce
+        interval: 300
+        onTriggered: {
+            if (root._pendingRestart && root.active) {
+                root._doEnable()
+            }
+            root._pendingRestart = false
+        }
+    }
+
+    onClockMinuteChanged: reEvaluate()
+    onAutomaticChanged: {
+        root.manualActive = undefined;
+        if (root._manualRestored) root._saveManual(); // no início do shell, não apaga a escolha salva antes de lê-la
+        root.firstEvaluation = true;
+        reEvaluate();
+    }
+
+    function inBetween(t, from, to) {
+        if (from < to) {
+            return (t >= from && t <= to);
+        } else {
+            // Wrapped around midnight
+            return (t >= from || t <= to);
+        }
+    }
+
+    function reEvaluate() {
+        const t = clockHour * 60 + clockMinute;
+        const from = fromHour * 60 + fromMinute;
+        const to = toHour * 60 + toMinute;
+        if (root.manualActive !== undefined && root._boundaryCrossed(root.manualAt, Date.now())) {
+            root.manualActive = undefined;
+            root._saveManual();
+        }
+        root.shouldBeOn = inBetween(t, from, to);
+        if (firstEvaluation) {
+            firstEvaluation = false;
+            root.ensureState();
+        }
+    }
+
+    onShouldBeOnChanged: ensureState()
+    function ensureState() {
+        root._restoreManual();
+        if (root.manualActive !== undefined) {
+            // A escolha manual manda até a próxima virada do horário (aplica também a que veio do estado salvo).
+            if (root.manualActive) root.enable(); else root.disable();
+            return;
+        }
+
+        if (root.automatic) {
+            if (root.shouldBeOn) {
+                root.enable();
+            } else {
+                root.disable();
+            }
+        } else if (root.manualEnabled) {
+            root.enable();
+        } else {
+            root.disable();
+        }
+    }
+
+    function load() { } // Dummy to force init
+
+    // LowPan Shells (§21.86): no KWin a luz é a do próprio KWin. O horário e o botão manual continuam sendo do
+    // shell (reEvaluate/toggle); ligar = [NightColor] Active=true, Mode=Constant, NightTemperature, com --notify
+    // (o KWin relê na hora). Desligar = Active=false.
+    function _kwinWrite(on) {
+        const args = ["/usr/bin/bash", "-c",
+            'w(){ /usr/bin/kwriteconfig6 --file kwinrc --group NightColor --key "$1" --notify "$2"; }; '
+            + (on ? `w Mode Constant; w NightTemperature ${root.colorTemperature}; w Active true` : "w Active false")];
+        Quickshell.execDetached(args);
+    }
+
+    function _doEnable() {
+        if (CompositorService.isKWin) {
+            root._kwinWrite(true);
+            return;
+        }
+        if (CompositorService.isNiri) {
+            Quickshell.execDetached([
+                "/usr/bin/bash", "-c",
+                `if [ -S "${Quickshell.env("XDG_RUNTIME_DIR") || ""}/systemd/private" ] &&
+                    [ -x /usr/bin/systemd-run ] && [ -x /usr/bin/systemctl ] && [ -x /usr/bin/timeout ] &&
+                    /usr/bin/timeout 3s /usr/bin/systemctl --user show-environment >/dev/null 2>&1; then
+                    exec /usr/bin/systemd-run --user --collect --unit=inir-wlsunset.service /usr/bin/wlsunset -T 6500 -t ${root.colorTemperature} -s 00:00 -S 23:59;
+                fi;
+                /usr/bin/pidof wlsunset >/dev/null 2>&1 ||
+                    nohup /usr/bin/wlsunset -T 6500 -t ${root.colorTemperature} -s 00:00 -S 23:59
+                        >/dev/null 2>&1 </dev/null &`
+            ]);
+        } else {
+            hyprsunsetStartProc.running = true;
+        }
+    }
+
+    function enable() {
+        root.active = true;
+        if (CompositorService.isKWin) {
+            root._doEnable();
+        } else if (CompositorService.isNiri) {
+            // Kill first, then start after kill completes
+            wlsunsetKillProc.running = true;
+        } else {
+            root._doEnable();
+        }
+    }
+
+    function disable() {
+        root.active = false;
+        if (CompositorService.isKWin) {
+            root._kwinWrite(false);
+        } else if (CompositorService.isNiri) {
+            wlsunsetKillProc.running = true;
+        } else {
+            hyprsunsetKillProc.running = true;
+        }
+    }
+
+    function fetchState() {
+        if (CompositorService.isKWin) {
+            kwinFetchProc.running = true;
+        } else if (CompositorService.isNiri) {
+            niriFetchProc.running = true;
+        } else {
+            fetchProc.running = true;
+        }
+    }
+
+    // === Hyprland processes ===
+    Process {
+        id: hyprsunsetStartProc
+        command: ["/usr/bin/bash", "-c", `pidof hyprsunset || /usr/bin/hyprsunset --temperature ${root.colorTemperature}`]
+    }
+
+    Process {
+        id: hyprsunsetKillProc
+        command: ["/usr/bin/pkill", "-x", "hyprsunset"]
+    }
+
+    Process {
+        id: fetchProc
+        running: !CompositorService.isNiri && !CompositorService.isKWin
+        command: ["/usr/bin/bash", "-c", "hyprctl hyprsunset temperature"]
+        stdout: StdioCollector {
+            id: stateCollector
+            onStreamFinished: {
+                const output = stateCollector.text.trim();
+                if (output.length == 0 || output.startsWith("Couldn't"))
+                    root.active = false;
+                else
+                    root.active = (output != "6500"); // 6500 is the default when off
+            }
+        }
+    }
+
+    // === KWin (Luz noturna do próprio KWin, §21.86) ===
+    Process {
+        id: kwinFetchProc
+        running: CompositorService.isKWin
+        command: ["/usr/bin/kreadconfig6", "--file", "kwinrc", "--group", "NightColor", "--key", "Active", "--default", "false"]
+        stdout: StdioCollector {
+            onStreamFinished: root.active = this.text.trim() === "true"
+        }
+    }
+
+    // === Niri processes (wlsunset) ===
+    Process {
+        id: wlsunsetKillProc
+        command: ["/usr/bin/bash", "-c",
+            `if [ -S "${Quickshell.env("XDG_RUNTIME_DIR") || ""}/systemd/private" ] &&
+                [ -x /usr/bin/systemctl ] && [ -x /usr/bin/timeout ] &&
+                /usr/bin/timeout 3s /usr/bin/systemctl --user show-environment >/dev/null 2>&1; then
+                /usr/bin/systemctl --user stop inir-wlsunset.service >/dev/null 2>&1 || true;
+            fi;
+            /usr/bin/pkill -x wlsunset >/dev/null 2>&1 || true`]
+        onExited: {
+            // If we're enabling, start wlsunset after kill completes
+            if (root.active) {
+                root._doEnable();
+            }
+        }
+    }
+
+    Process {
+        id: niriFetchProc
+        running: CompositorService.isNiri && !CompositorService.isKWin
+        command: ["/usr/bin/bash", "-c",
+            `if [ -S "${Quickshell.env("XDG_RUNTIME_DIR") || ""}/systemd/private" ] &&
+                [ -x /usr/bin/systemctl ] && [ -x /usr/bin/timeout ] &&
+                /usr/bin/timeout 3s /usr/bin/systemctl --user show-environment >/dev/null 2>&1 &&
+                /usr/bin/systemctl --user is-active --quiet inir-wlsunset.service; then
+                exit 0;
+            fi;
+            /usr/bin/pidof wlsunset >/dev/null`]
+        onExited: (exitCode, exitStatus) => {
+            root.active = (exitCode === 0);
+        }
+    }
+
+    function toggle(active = undefined) {
+        if (root.manualActive === undefined) {
+            root.manualActive = root.active;
+            root.manualActiveHour = root.clockHour;
+            root.manualActiveMinute = root.clockMinute;
+            root.manualAt = Date.now();
+        }
+
+        root.manualActive = active !== undefined ? active : !root.manualActive;
+        Config.setNestedValue("light.night.enabled", root.manualActive);
+        root._saveManual();
+        if (root.manualActive) {
+            root.enable();
+        } else {
+            root.disable();
+        }
+    }
+
+    // React to temperature changes while active
+    Connections {
+        target: Config.options?.light?.night ?? null
+        enabled: !!(Config.options?.light?.night)
+        
+        function onColorTemperatureChanged() {
+            if (!root.active) return;
+            const temp = Config.options?.light?.night?.colorTemperature ?? root.colorTemperature;
+            
+            if (CompositorService.isKWin) {
+                root._pendingRestart = true;
+                restartDebounce.restart();
+            } else if (CompositorService.isNiri) {
+                // Queue restart with debounce
+                root._pendingRestart = true;
+                restartDebounce.restart();
+            } else {
+                Quickshell.execDetached(["/usr/bin/hyprctl", "hyprsunset", "temperature", `${temp}`]);
+            }
+        }
+    }
+
+    // React to schedule changes while automatic mode is on
+    Connections {
+        target: Config.options?.light?.night ?? null
+        enabled: root.automatic && !!(Config.options?.light?.night)
+        
+        function onFromChanged() {
+            root.firstEvaluation = true;
+            root.reEvaluate();
+        }
+        
+        function onToChanged() {
+            root.firstEvaluation = true;
+            root.reEvaluate();
+        }
+    }
+}

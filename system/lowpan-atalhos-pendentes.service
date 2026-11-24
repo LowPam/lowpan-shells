@@ -1,0 +1,14 @@
+# LowPan Shells — atalhos pessoais que o instalador não conseguiu gravar porque o efeito do KWin ainda não tinha
+# carregado (ex.: o Cubo, Meta+Tab, numa conta nova). Só roda com a marca ~/.local/state/lowpan-shells/install/
+# atalhos-pendentes; aplica de novo e a marca some quando nada mais é pulado. Lógica: install/atalhos-kde.py pendentes.
+[Unit]
+Description=LowPan Shells: atalhos pessoais pendentes
+After=plasma-workspace.target
+ConditionPathExists=%S/lowpan-shells/install/atalhos-pendentes
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/lowpan-atalhos-kde pendentes
+
+[Install]
+WantedBy=plasma-workspace.target

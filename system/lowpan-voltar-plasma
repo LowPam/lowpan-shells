@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Emergência do LowPan Shells: derruba o shell Quickshell e devolve o plasmashell.
+# Atalho global: Meta+Ctrl+Alt+P (entrada "emergency" do lowpan-shells-shortcuts).
+# O PATH da sessão não tem ~/.local/bin: o switch é achado pela pasta deste script (link → projeto/system).
+DIR="$(dirname "$(readlink -f "$0")")"
+[[ -x "$DIR/lowpan-shells-switch" ]] && "$DIR/lowpan-shells-switch" off && exit 0
+# Sem o switch (projeto movido/apagado): o mínimo para ter um shell de volta
+systemctl --user stop lowpan-shells.service 2>/dev/null
+pkill -x qs 2>/dev/null; pkill -x quickshell 2>/dev/null
+systemctl --user unmask plasma-plasmashell.service 2>/dev/null
+systemctl --user start plasma-plasmashell.service
+notify-send -a "LowPan Shells" -i plasma "Plasma restaurado" "plasmashell iniciado pelo atalho de emergência" 2>/dev/null || true

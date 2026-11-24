@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# LowPan Shells — Meta+V nos dois modos.
+# Com o LowPan Shells ativo: abre a área de transferência dele (a launcher já no prefixo ";").
+# No Plasma normal: abre o menu do Klipper na posição do mouse, como o Meta+V original.
+if systemctl --user is-active --quiet lowpan-shells.service; then
+    exec /usr/bin/qs -c lowpan-shells ipc call clipboard toggle
+fi
+exec busctl --user call org.kde.plasmashell /klipper org.kde.klipper.klipper showKlipperPopupMenu

@@ -1,0 +1,8 @@
+[Unit]
+Description=LowPan Shells: segue a caixa de liga/desliga do tiling
+ConditionPathExists=%h/.local/share/kwin/scripts/lowpan-tiling
+
+[Service]
+Type=oneshot
+TimeoutStartSec=90
+ExecStart=%h/.config/quickshell/lowpan-shells/../system/lowpan-shells-tiling painel

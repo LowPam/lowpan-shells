@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LowPan Shells: política do ImageMagick só para o shell (MAGICK_CONFIGURE_PATH no lowpan-shells.service).
+     Vídeo pelo magick decodifica o arquivo inteiro (4K = GBs de memória; OOM em 2026-11-05): o shell usa ffmpeg
+     para vídeo, então o magick fica proibido de abrir vídeo e ganha tetos de recursos. -->
+<policymap>
+  <policy domain="coder" rights="none" pattern="{MP4,M4V,MOV,WEBM,MKV,AVI,MPEG,MPG,WMV,FLV,VIDEO}" />
+  <policy domain="delegate" rights="none" pattern="{mpeg:decode,video:decode}" />
+  <policy domain="resource" name="memory" value="256MiB"/>
+  <policy domain="resource" name="map" value="512MiB"/>
+  <policy domain="resource" name="disk" value="1GiB"/>
+  <policy domain="resource" name="area" value="128MP"/>
+  <policy domain="resource" name="time" value="60"/>
+</policymap>

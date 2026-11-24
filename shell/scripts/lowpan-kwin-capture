@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+# LowPan Shells: captura de tela no KWin para a ferramenta de captura do iNiR.
+# O iNiR usa grim (screencopy do wlroots), que o KWin não tem. Aqui a imagem vem do
+# org.kde.KWin.ScreenShot2 (o mesmo DBus do Spectacle), pelo pipe, e vira PNG.
+#
+# Uso: lowpan-kwin-capture [--screen NOME | --workspace | --active-window] [--cursor] SAIDA.png|-
+#   --screen NOME  monitor (nome do wl_output, ex.: DP-1); padrão: tela ativa
+#   --workspace    todos os monitores juntos
+#   --active-window  só a janela ativa (com a decoração)
+#   --cursor       inclui o cursor
+# Sai com 0 e o PNG gravado; senão, 1 e a mensagem no stderr.
+import os
+import sys
+import threading
+
+import dbus
+from PIL import Image
+
+# QImage::Format -> (modo do PIL, modo cru)
+FORMATS = {
+    4: ("RGB", "BGRX"),     # RGB32 (little-endian: B G R X)
+    5: ("RGBA", "BGRA"),    # ARGB32
+    6: ("RGBA", "BGRa"),    # ARGB32_Premultiplied
+    13: ("RGB", "RGB"),     # RGB888
+    16: ("RGB", "RGBX"),    # RGBX8888
+    17: ("RGBA", "RGBA"),   # RGBA8888
+    18: ("RGBA", "RGBa"),   # RGBA8888_Premultiplied
+}
+
+
+def main(argv):
+    screen = None
+    workspace = False
+    window = False
+    cursor = False
+    out = None
+    it = iter(argv)
+    for a in it:
+        if a == "--screen":
+            screen = next(it, None)
+        elif a == "--workspace":
+            workspace = True
+        elif a == "--active-window":
+            window = True
+        elif a == "--cursor":
+            cursor = True
+        elif out is None:
+            out = a
+        else:
+            print("argumento a mais: " + a, file=sys.stderr)
+            return 2
+    if not out:
+        print(__doc__ or "uso: lowpan-kwin-capture [--screen NOME|--workspace] SAIDA.png", file=sys.stderr)
+        return 2
+
+    iface = dbus.Interface(
+        dbus.SessionBus().get_object("org.kde.KWin", "/org/kde/KWin/ScreenShot2"),
+        "org.kde.KWin.ScreenShot2")
+    opts = dbus.Dictionary({"native-resolution": True, "include-cursor": cursor}, signature="sv")
+
+    r, w = os.pipe()
+    chunks = []
+
+    def reader():
+        with os.fdopen(r, "rb") as f:
+            while True:
+                c = f.read(1 << 20)
+                if not c:
+                    break
+                chunks.append(c)
+
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+    try:
+        fd = dbus.types.UnixFd(w)
+        if window:
+            meta = iface.CaptureActiveWindow(dbus.Dictionary({"include-cursor": cursor, "include-decoration": True,
+                                                              "include-shadow": False, "native-resolution": True},
+                                                             signature="sv"), fd, timeout=10)
+        elif workspace:
+            meta = iface.CaptureWorkspace(opts, fd, timeout=10)
+        elif screen:
+            meta = iface.CaptureScreen(screen, opts, fd, timeout=10)
+        else:
+            meta = iface.CaptureActiveScreen(opts, fd, timeout=10)
+    except dbus.DBusException as e:
+        print("KWin ScreenShot2: " + e.get_dbus_message(), file=sys.stderr)
+        return 1
+    finally:
+        # UnixFd guarda uma cópia do fd: sem fechar as duas pontas o leitor nunca vê o fim.
+        os.close(fd.take())
+        os.close(w)
+    t.join(10)
+
+    data = b"".join(chunks)
+    if str(meta.get("type", "raw")) != "raw":
+        print("tipo de imagem inesperado: " + str(meta.get("type")), file=sys.stderr)
+        return 1
+    width, height = int(meta["width"]), int(meta["height"])
+    stride, fmt = int(meta["stride"]), int(meta["format"])
+    if fmt not in FORMATS:
+        print("formato QImage não suportado: %d" % fmt, file=sys.stderr)
+        return 1
+    if len(data) < stride * height:
+        print("imagem incompleta (%d de %d bytes)" % (len(data), stride * height), file=sys.stderr)
+        return 1
+    mode, raw = FORMATS[fmt]
+    img = Image.frombuffer(mode, (width, height), data, "raw", raw, stride, 1)
+    if img.mode != "RGB":
+        img = img.convert("RGB")  # a tela é opaca: PNG menor e sem o canal X/pré-multiplicado
+    target = sys.stdout.buffer if out == "-" else out
+    img.save(target, "PNG", compress_level=1)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

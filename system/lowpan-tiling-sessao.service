@@ -1,0 +1,16 @@
+# LowPan Shells — tiling por ambiente (2026-11-22). Depois que o KWin sobe (ele hospeda o kglobalaccel), liga ou
+# desliga o LowPan Tiling de verdade (teclas, botões da barra, encaixe nas bordas) conforme a escolha do ambiente desta
+# sessão: LowPan = Configurações › Janelas › Tiling; Plasma = lowpan-shells-tiling on|off rodado no Plasma.
+# O interruptor do motor já foi acertado antes do KWin (lowpan-sessao-login → sessao --cedo).
+[Unit]
+Description=LowPan Shells: tiling do ambiente desta sessão
+After=plasma-kwin_wayland.service lowpan-theme-login.service
+ConditionPathExists=%h/.local/share/kwin/scripts/lowpan-tiling
+
+[Service]
+Type=oneshot
+TimeoutStartSec=90
+ExecStart=%h/.config/quickshell/lowpan-shells/../system/lowpan-shells-tiling sessao
+
+[Install]
+WantedBy=plasma-workspace.target

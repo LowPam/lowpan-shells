@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Name": "LowPan Tiling: recuo ao arrastar",
+        "Description": "While a window is dragged, the other windows shrink a little around their centre (visual only).",
+        "Description[pt_BR]": "Enquanto uma janela é arrastada, as outras encolhem um pouco em volta do centro (só visual).",
+        "Category": "Appearance",
+        "Authors": [{ "Name": "LowPan Shells" }],
+        "Id": "lowpan_drag_inset",
+        "License": "MIT",
+        "Version": "1.0",
+        "EnabledByDefault": false
+    },
+    "X-KDE-Ordering": "60",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

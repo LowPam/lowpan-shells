@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# LowPan Shells — efeitos do KWin vindos do AUR param de carregar quando o kwin atualiza
+# ("was built for a different version of KWin and needs to be rebuilt"). Cada .so grava a versão
+# do KWin para a qual foi compilado (org.kde.kwin.EffectPluginFactory6.8.2); este script compara
+# com o kwin instalado e avisa com um botão que recompila (o pacman pede a senha). Pacote com PKGBUILD
+# próprio em extras/ (ex.: Magic Lamp com o patch lowpan-fallback-sem-painel) é recompilado de lá —
+# o yay --rebuild usaria o PKGBUILD do AUR e perderia o patch (aconteceu em 2026-11-17, §21.108).
+#
+#   lowpan-efeitos-kwin            verifica; se houver defasado, notifica (botão "Recompilar")
+#   lowpan-efeitos-kwin listar     só lista os pacotes defasados (saída vazia = tudo certo)
+#   lowpan-efeitos-kwin recompilar recompila os defasados e recarrega os efeitos (rodar num terminal)
+#
+# Disparado por lowpan-efeitos-kwin.service: no login e pelo lowpan-efeitos-kwin.path (troca do
+# /usr/bin/kwin_wayland = atualização do kwin). §19.2 linha 51.
+set -u
+
+PLUGINS=/usr/lib/qt6/plugins/kwin
+SELF=$(readlink -f "$0")
+EXTRAS=$(dirname "$(dirname "$SELF")")/extras
+
+kwin_instalado() { pacman -Q kwin 2>/dev/null | awk '{print $2}' | cut -d- -f1; }
+
+# Pacotes de fora dos repositórios com .so de plugin do KWin compilado para outra versão.
+defasados() {
+    local alvo pkg f ver
+    alvo=$(kwin_instalado)
+    [ -n "$alvo" ] || return 0
+    for pkg in $(pacman -Qmq 2>/dev/null); do
+        for f in $(pacman -Qlq "$pkg" 2>/dev/null | grep "^$PLUGINS/.*\.so$"); do
+            ver=$(grep -aoE 'Factory[0-9]+\.[0-9]+\.[0-9]+' "$f" 2>/dev/null | head -1 | sed 's/^Factory//')
+            if [ -n "$ver" ] && [ "$ver" != "$alvo" ]; then
+                echo "$pkg"
+                break
+            fi
+        done
+    done
+}
+
+# Espera o pacman terminar (o .path dispara no meio da atualização).
+esperar_pacman() {
+    local n=0
+    while [ -e /var/lib/pacman/db.lck ] && [ $n -lt 600 ]; do sleep 2; n=$((n + 2)); done
+    sleep 3
+}
+
+verificar() {
+    [ "${1:-}" = "--esperar" ] && esperar_pacman
+    local lista
+    lista=$(defasados | sort -u | tr '\n' ' ' | sed 's/ $//')
+    [ -n "$lista" ] || exit 0
+    local acao
+    acao=$(notify-send -a "LowPan Shells" -i preferences-desktop-effects -u critical -w \
+        -A recompilar="Recompilar" \
+        "Efeitos do KWin precisam ser recompilados" \
+        "O KWin foi atualizado para $(kwin_instalado) e estes efeitos pararam de carregar: $lista (ex.: cantos arredondados e contorno de foco).")
+    if [ "$acao" = "recompilar" ]; then
+        konsole --hold -e "$SELF" recompilar
+    fi
+}
+
+recompilar() {
+    local lista
+    lista=$(defasados | sort -u)
+    if [ -z "$lista" ]; then
+        echo "Nenhum efeito defasado."
+        exit 0
+    fi
+    echo "Recompilando: $(echo $lista)"
+    local pkg dir tmp aur=""
+    for pkg in $lista; do
+        dir=$(grep -l "^pkgname=$pkg\$" "$EXTRAS"/*/PKGBUILD 2>/dev/null | head -1)
+        if [ -n "$dir" ]; then
+            # PKGBUILD do projeto (com patch). Compila fora da pasta do projeto: um espaço no caminho
+            # quebra o -ffile-prefix-map.
+            dir=$(dirname "$dir")
+            tmp=$(mktemp -d)
+            cp "$dir"/PKGBUILD "$dir"/*.patch "$tmp"/ 2>/dev/null
+            ( cd "$tmp" && BUILDDIR="$tmp/build" SRCDEST="$tmp/src" PKGDEST="$tmp" makepkg -si --noconfirm ) \
+                || { echo "Falhou: $pkg"; exit 1; }
+            rm -rf "$tmp"
+        else
+            aur="$aur $pkg"
+        fi
+    done
+    if [ -n "$aur" ]; then
+        # shellcheck disable=SC2086
+        yay -S --rebuild --noconfirm $aur || { echo "Falhou."; exit 1; }
+    fi
+    # Recarrega os efeitos habilitados (só pega se o KWin em execução já for o atualizado;
+    # se não for, vale no próximo login).
+    local f id
+    for f in $(pacman -Qlq $lista 2>/dev/null | grep "^$PLUGINS/effects/plugins/.*\.so$"); do
+        id=$(basename "$f" .so); id=${id#lib}
+        qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.unloadEffect "$id" >/dev/null 2>&1
+        qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect "$id" >/dev/null 2>&1
+    done
+    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
+    echo "Pronto. Se algum efeito não voltou, saia e entre de novo na sessão."
+}
+
+case "${1:-}" in
+    listar) defasados | sort -u ;;
+    recompilar) recompilar ;;
+    *) verificar "${1:-}" ;;
+esac

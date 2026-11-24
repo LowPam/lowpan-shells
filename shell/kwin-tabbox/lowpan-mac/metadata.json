@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "KWin/WindowSwitcher",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "LowPan Shells"
+            }
+        ],
+        "Description": "Row of large app icons on a rounded dark panel (LowPan Shells, iRiS)",
+        "Description[pt_BR]": "Fileira de ícones grandes num painel escuro arredondado (LowPan Shells, iRiS)",
+        "Icon": "preferences-system-windows-switcher-big-icons",
+        "Id": "lowpan-mac",
+        "License": "GPL",
+        "Name": "LowPan",
+        "Name[pt_BR]": "LowPan"
+    }
+}

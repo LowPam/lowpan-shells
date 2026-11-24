@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""LowPan Shells — helper da ponte KWin.
+
+stdout: um JSON por linha com o estado (vindo do KWin Script).
+stdin : um JSON por linha com comandos ({"action": "toggle", "id": "..."}), entregues ao script por long-poll.
+
+O helper carrega o KWin Script ao iniciar e o descarrega ao sair. É iniciado pelo Quickshell (Process).
+"""
+import json
+import os
+import re
+import signal
+import sys
+
+import dbus
+import dbus.service
+from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
+
+BUS_NAME = "org.lowpan.Shells.Bridge"
+PATH = "/Bridge"
+IFACE = "org.lowpan.Shells.Bridge"
+PLUGIN = "lowpan-shells-bridge"
+PLASMA_AREAS = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "lowpan-shells", "plasma-areas.json")
+# LowPan Tiling: tamanho de cada app quando flutua (Meta+F), lembrado entre sessões
+FLOAT_GEOMETRY = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "lowpan-shells", "float-geometry.json")
+POLL_TIMEOUT_S = 20  # o callDBus do KWin desiste em ~25 s
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+SCRIPT_MAIN = os.environ.get(
+    "LOWPAN_BRIDGE_SCRIPT",
+    os.path.join(HERE, "..", "script", "contents", "code", "main.js"),
+)
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
+
+class Bridge(dbus.service.Object):
+    def __init__(self, bus):
+        super().__init__(dbus.service.BusName(BUS_NAME, bus, do_not_queue=True), PATH)
+        self.queue = []
+        self.pending = None  # (ok, timeout_source)
+        self.on_areas = None  # LowPan Shells: resposta do script ao pedido "areas" (StrutManager)
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="")
+    def Event(self, payload):
+        try:
+            msg = json.loads(payload)
+        except ValueError:
+            emit({"type": "error", "message": "payload inválido do KWin"})
+            return
+        if isinstance(msg, dict) and msg.get("type") == "areas":
+            if self.on_areas:
+                self.on_areas(msg.get("areas") or {})
+            return
+        emit(msg)
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s", async_callbacks=("ok", "err"))
+    def Next(self, ok, err):
+        if self.pending:  # não deveria acontecer; libera o antigo
+            self._reply("")
+        if self.queue:
+            ok(self.queue.pop(0))
+            return
+        source = GLib.timeout_add_seconds(POLL_TIMEOUT_S, self._timeout)
+        self.pending = (ok, source)
+
+    def _timeout(self):
+        if self.pending:
+            ok, _ = self.pending
+            self.pending = None
+            ok("")
+        return False
+
+    def _reply(self, value):
+        ok, source = self.pending
+        self.pending = None
+        GLib.source_remove(source)
+        ok(value)
+
+    def push(self, cmd):
+        if self.pending:
+            self._reply(cmd)
+        else:
+            self.queue.append(cmd)
+
+    # LowPan Tiling (fork do Krohnkite): memória do tamanho flutuante por app ("resourceClass").
+    # O motor carrega tudo ao iniciar (FloatAll) e grava a cada mudança (FloatSet).
+    def _float_read(self):
+        try:
+            with open(FLOAT_GEOMETRY) as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def FloatAll(self):
+        return json.dumps(self._float_read(), ensure_ascii=False)
+
+    @dbus.service.method(IFACE, in_signature="sii", out_signature="")
+    def FloatSet(self, app, width, height):
+        app = str(app)
+        if not app or width < 50 or height < 50:
+            return
+        data = self._float_read()
+        if data.get(app) == {"w": int(width), "h": int(height)}:
+            return
+        data[app] = {"w": int(width), "h": int(height)}
+        os.makedirs(os.path.dirname(FLOAT_GEOMETRY), exist_ok=True)
+        tmp = FLOAT_GEOMETRY + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f, indent=1, ensure_ascii=False, sort_keys=True)
+        os.replace(tmp, FLOAT_GEOMETRY)
+
+
+class StrutManager(dbus.service.Object):
+    """LowPan Shells — imita o /StrutManager do plasmashell.
+
+    O Yakuake (e outros) pergunta ao plasmashell a área útil da tela para calcular a altura; sem o
+    plasmashell cai na tela inteira e a barra de abas sai cortada. A área vem do KWin Script
+    (clientArea MaximizeArea, que já desconta as zonas exclusivas do shell). Só pega o nome se o
+    plasmashell não estiver rodando; ao sair o nome é liberado e o plasmashell volta a poder subir.
+    """
+
+    NAME = "org.kde.plasmashell"
+    IFACE = "org.kde.PlasmaShell.StrutManager"
+    WAIT_MS = 400
+
+    def __init__(self, bus, bridge):
+        self.bus_name = dbus.service.BusName(self.NAME, bus, do_not_queue=True)
+        super().__init__(self.bus_name, "/StrutManager")
+        self.bridge = bridge
+        self.cache = {}
+        self.waiting = []  # (screen, ok)
+        self.timer = None
+        bridge.on_areas = self._got
+
+    def _plasma(self):
+        try:
+            with open(PLASMA_AREAS) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def _rect(self, screen):
+        # Preferir a área que o plasmashell informava (gravada pelo lowpan-shells-switch): o Yakuake só
+        # calcula o tamanho ao iniciar, então responder igual ao Plasma evita faixa preta/corte ao trocar.
+        plasma = self._plasma()
+        if screen in plasma:
+            r = plasma[screen]
+            return dbus.Struct((int(r["x"]), int(r["y"]), int(r["width"]), int(r["height"])), signature="iiii")
+        r = self.cache.get(screen) or (next(iter(self.cache.values())) if self.cache else None)
+        if not r:
+            return dbus.Struct((0, 0, 0, 0), signature="iiii")
+        return dbus.Struct((int(r["x"]), int(r["y"]), int(r["width"]), int(r["height"])), signature="iiii")
+
+    def _flush(self):
+        waiting, self.waiting = self.waiting, []
+        if self.timer:
+            GLib.source_remove(self.timer)
+            self.timer = None
+        for screen, ok in waiting:
+            ok(self._rect(screen))
+        return False
+
+    def _got(self, areas):
+        self.cache = areas
+        self._flush()
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="(iiii)", async_callbacks=("ok", "err"))
+    def availableScreenRect(self, screen, ok, err):
+        # Responde na hora com a área guardada: se a resposta atrasar, o Yakuake aplica o tamanho
+        # depois de mapear e o center-new-windows fixa o tamanho antigo (sobra uma faixa preta).
+        # O script reenvia a área quando superfícies do shell entram/saem e ao trocar de tela.
+        if self.cache:
+            ok(self._rect(str(screen)))
+            self.bridge.push(json.dumps({"action": "areas"}))
+            return
+        self.waiting.append((str(screen), ok))
+        if not self.timer:
+            self.timer = GLib.timeout_add(self.WAIT_MS, self._timeout)
+        self.bridge.push(json.dumps({"action": "areas"}))
+
+    def _timeout(self):
+        self.timer = None
+        return self._flush()
+
+    # chamados pelo plasmashell para registrar painéis de terceiros; aqui não há o que fazer
+    @dbus.service.method(IFACE, in_signature="ss(iiii)", out_signature="")
+    def setAvailableScreenRect(self, service, screen, rect):
+        pass
+
+    @dbus.service.method(IFACE, in_signature="ssa(iiii)", out_signature="")
+    def setAvailableScreenRegion(self, service, screen, rects):
+        pass
+
+
+def kwin_scripting(bus):
+    return dbus.Interface(bus.get_object("org.kde.KWin", "/Scripting"), "org.kde.kwin.Scripting")
+
+
+def load_script(bus):
+    scripting = kwin_scripting(bus)
+    if scripting.isScriptLoaded(PLUGIN):
+        scripting.unloadScript(PLUGIN)
+    # loadScript é sobrecarregado (s) e (ss): forçar a assinatura de 2 argumentos
+    sid = scripting.loadScript(os.path.realpath(SCRIPT_MAIN), PLUGIN, signature="ss")
+    if int(sid) < 0:
+        raise RuntimeError("KWin recusou o script: " + SCRIPT_MAIN)
+    scripting.start()
+    return scripting
+
+
+class Local:
+    """Ações resolvidas direto no DBus do KDE, sem passar pelo KWin Script."""
+
+    def __init__(self, bus):
+        self.bus = bus
+        self.kb = None
+        try:
+            self.kb = dbus.Interface(bus.get_object("org.kde.keyboard", "/Layouts"), "org.kde.KeyboardLayouts")
+            self.kb.connect_to_signal("layoutChanged", lambda *_: self.emit_keyboard())
+            self.kb.connect_to_signal("layoutListChanged", lambda *_: self.emit_keyboard())
+        except dbus.exceptions.DBusException:
+            self.kb = None
+        # "Espiar área de trabalho" (Meta+D): o sinal do KWin Script não dispara no KWin 6.8, o do DBus sim.
+        self.kwin = None
+        try:
+            self.kwin = dbus.Interface(bus.get_object("org.kde.KWin", "/KWin"), "org.kde.KWin")
+            self.kwin.connect_to_signal("showingDesktopChanged", lambda showing: emit({"type": "showingDesktop", "showing": bool(showing)}))
+        except dbus.exceptions.DBusException:
+            self.kwin = None
+
+    def emit_showing_desktop(self):
+        if not self.kwin:
+            return
+        try:
+            showing = self.bus.get_object("org.kde.KWin", "/KWin").Get("org.kde.KWin", "showingDesktop", dbus_interface="org.freedesktop.DBus.Properties")
+            emit({"type": "showingDesktop", "showing": bool(showing)})
+        except dbus.exceptions.DBusException:
+            pass
+
+    def emit_keyboard(self):
+        if not self.kb:
+            return
+        try:
+            layouts = [{"short": str(a), "variant": str(b), "name": str(c)} for a, b, c in self.kb.getLayoutsList()]
+            emit({"type": "keyboard", "layouts": layouts, "current": int(self.kb.getLayout())})
+        except dbus.exceptions.DBusException as e:
+            emit({"type": "error", "message": "teclado: " + str(e)})
+
+    def handle(self, cmd):
+        """True se a ação foi tratada aqui."""
+        action = cmd.get("action")
+        try:
+            if action == "invokeShortcut":  # ex.: {"component": "kwin", "name": "Overview"}
+                comp = self.bus.get_object("org.kde.kglobalaccel", "/component/" + cmd.get("component", "kwin"))
+                dbus.Interface(comp, "org.kde.kglobalaccel.Component").invokeShortcut(cmd["name"], signature="s")
+            elif action == "logout" and cmd.get("kind") == "direct":
+                # Confirmação já feita na tela de sessão do shell: encerra direto (salva a sessão, sem a tela do KDE).
+                shutdown = self.bus.get_object("org.kde.Shutdown", "/Shutdown")
+                dbus.Interface(shutdown, "org.kde.Shutdown").logout()
+            elif action == "logout" and cmd.get("kind") in ("direct-reboot", "direct-shutdown"):
+                # §21.46: diálogo da família estilo macOS já confirmou — o KDE salva a sessão e reinicia/desliga.
+                shutdown = dbus.Interface(self.bus.get_object("org.kde.Shutdown", "/Shutdown"), "org.kde.Shutdown")
+                (shutdown.logoutAndReboot if cmd["kind"] == "direct-reboot" else shutdown.logoutAndShutdown)()
+            elif action == "logout":
+                kind = {"logout": "promptLogout", "reboot": "promptReboot", "shutdown": "promptShutDown"}.get(cmd.get("kind"), "promptAll")
+                prompt = dbus.Interface(self.bus.get_object("org.kde.LogoutPrompt", "/LogoutPrompt"), "org.kde.LogoutPrompt")
+                getattr(prompt, kind)()
+            elif action == "keyboardNext" and self.kb:
+                self.kb.switchToNextLayout()
+            elif action == "keyboardPrev" and self.kb:
+                self.kb.switchToPreviousLayout()
+            elif action == "keyboardSet" and self.kb:
+                self.kb.setLayout(dbus.UInt32(int(cmd.get("index", 0))))
+            elif action == "keyboardRefresh":
+                self.emit_keyboard()
+            else:
+                return False
+        except (dbus.exceptions.DBusException, KeyError, AttributeError) as e:
+            emit({"type": "error", "message": f"{action}: {e}"})
+        return True
+
+
+class AppMenu:
+    """LowPan Shells (§21.35): menu real do app em foco na barra de menu estilo macOS.
+
+    - Com a barra de menu na tela (appMenuEnable/appMenuDisable), anuncia `org.kde.kappmenuview` (o que o widget "Menu global" do Plasma faz): com ele, o kded appmenu cria o
+      `com.canonical.AppMenu.Registrar` e os apps Qt/KDE passam a publicar o menu no DBus (`/MenuBar/N`, DBusMenu).
+      Só vale para apps abertos DEPOIS (o Qt decide ao criar a janela).
+    - O KWin não informa serviço/caminho do menu de cada janela; achamos pelo processo: nomes do barramento com o pid
+      da janela → objetos em `/MenuBar`.
+    - Comandos (stdin): appMenuLoad {pid}, appMenuOpen {service, path, id}, appMenuClick {service, path, id}.
+      Respostas (stdout): {"type": "appMenu", pid, service, path, menus} e {"type": "appMenuSub", service, path, id, children}.
+    """
+
+    PROPS = ["type", "label", "enabled", "visible", "toggle-type", "toggle-state", "children-display", "shortcut"]
+
+    def __init__(self, bus):
+        self.bus = bus
+        self.name = None  # só com a barra de menu na tela (appMenuEnable): com o leitor ativo, os apps Qt
+                          # escondem a barra de menu da própria janela — no iRiS ficariam sem menu
+        self.dbus_iface = dbus.Interface(bus.get_object("org.freedesktop.DBus", "/org/freedesktop/DBus"), "org.freedesktop.DBus")
+
+    @staticmethod
+    def _label(text):
+        return str(text).replace("__", "\x01").replace("_", "").replace("\x01", "_")
+
+    @staticmethod
+    def _shortcut(value):
+        names = {"Control": "Ctrl", "Shift": "Shift", "Alt": "Alt", "Super": "Meta"}
+        try:
+            combos = ["+".join(names.get(str(k), str(k)) for k in combo) for combo in value]
+            return combos[0] if combos else ""
+        except TypeError:
+            return ""
+
+    def _node(self, raw):
+        nid, props, children = raw
+        item = {
+            "id": int(nid),
+            "label": self._label(props.get("label", "")),
+            "type": str(props.get("type", "standard")),
+            "enabled": bool(props.get("enabled", True)),
+            "visible": bool(props.get("visible", True)),
+            "toggleType": str(props.get("toggle-type", "")),
+            "toggleState": int(props.get("toggle-state", -1)),
+            "shortcut": self._shortcut(props.get("shortcut", [])),
+            "submenu": str(props.get("children-display", "")) == "submenu" or len(children) > 0,
+        }
+        item["children"] = [self._node(c) for c in children]
+        return item
+
+    def _menu(self, service, path):
+        return dbus.Interface(self.bus.get_object(service, path, introspect=False), "com.canonical.dbusmenu")
+
+    def _find(self, pid):
+        # conexões que já estouraram o prazo não são perguntadas de novo (§21.42): cada nova ativação do app
+        # atrasava ~0,5 s os comandos seguintes (dock, menus)
+        mute = self.__dict__.setdefault("mute", set())
+        for name in self.dbus_iface.ListNames():
+            name = str(name)
+            if not name.startswith(":") or name in mute:
+                continue
+            try:
+                if int(self.dbus_iface.GetConnectionUnixProcessID(name)) != pid:
+                    continue
+                # prazo curto (§21.42): app que não responde no D-Bus (ex.: music-player em Python) travava o
+                # ajudante por 25 s e a fila de comandos do KWin morria
+                xml = str(dbus.Interface(self.bus.get_object(name, "/MenuBar", introspect=False),
+                                         "org.freedesktop.DBus.Introspectable").Introspect(timeout=0.5))
+            except dbus.exceptions.DBusException as e:
+                if "NoReply" in (e.get_dbus_name() or "") or "Timeout" in (e.get_dbus_name() or ""):
+                    mute.add(name)
+                continue
+            nodes = sorted(int(n) for n in re.findall(r'<node name="(\d+)"', xml))
+            if nodes:
+                return name, "/MenuBar/%d" % nodes[0]
+        return None, None
+
+    def handle(self, cmd):
+        action = cmd.get("action")
+        if action == "appMenuEnable":
+            if self.name is None:
+                try:
+                    self.name = dbus.service.BusName("org.kde.kappmenuview", self.bus, do_not_queue=True)
+                except dbus.exceptions.NameExistsException:
+                    self.name = False  # o "Menu global" do Plasma já está aí: os apps publicam do mesmo jeito
+        elif action == "appMenuDisable":
+            if self.name:
+                try:
+                    self.bus.release_name("org.kde.kappmenuview")
+                except dbus.exceptions.DBusException:
+                    pass
+            self.name = None
+        elif action == "appMenuLoad":
+            pid = int(cmd.get("pid") or 0)
+            service, path, menus = None, None, []
+            if pid > 0:
+                try:
+                    service, path = self._find(pid)
+                    if service:
+                        _rev, layout = self._menu(service, path).GetLayout(0, -1, self.PROPS, timeout=2)
+                        menus = self._node(layout)["children"]
+                except dbus.exceptions.DBusException as e:
+                    emit({"type": "error", "message": "appMenuLoad: " + str(e)})
+                    service, path, menus = None, None, []
+            emit({"type": "appMenu", "pid": pid, "service": service or "", "path": path or "", "menus": menus})
+        elif action == "appMenuOpen":
+            service, path, nid = str(cmd.get("service")), str(cmd.get("path")), int(cmd.get("id", 0))
+            try:
+                menu = self._menu(service, path)
+                try:
+                    menu.AboutToShow(nid, timeout=1)
+                    menu.Event(nid, "opened", dbus.Int32(0, variant_level=1), dbus.UInt32(0), timeout=1)
+                except dbus.exceptions.DBusException:
+                    pass
+                _rev, layout = menu.GetLayout(nid, -1, self.PROPS, timeout=2)
+                emit({"type": "appMenuSub", "service": service, "path": path, "id": nid,
+                      "children": self._node(layout)["children"]})
+            except dbus.exceptions.DBusException as e:
+                emit({"type": "error", "message": "appMenuOpen: " + str(e)})
+        elif action == "appMenuClick":
+            service, path, nid = str(cmd.get("service")), str(cmd.get("path")), int(cmd.get("id", 0))
+            try:
+                self._menu(service, path).Event(nid, "clicked", dbus.Int32(0, variant_level=1), dbus.UInt32(0), timeout=1)
+            except dbus.exceptions.DBusException as e:
+                emit({"type": "error", "message": "appMenuClick: " + str(e)})
+        else:
+            return False
+        return True
+
+
+def main():
+    DBusGMainLoop(set_as_default=True)
+    bus = dbus.SessionBus()
+    try:
+        bridge = Bridge(bus)
+    except dbus.exceptions.NameExistsException:
+        emit({"type": "error", "message": "já existe outra ponte rodando"})
+        return 1
+
+    loop = GLib.MainLoop()
+    struts = None
+    try:
+        struts = StrutManager(bus, bridge)
+    except dbus.exceptions.NameExistsException:
+        pass  # plasmashell rodando: ele mesmo responde
+    scripting = load_script(bus)
+    local = Local(bus)
+    appmenu = AppMenu(bus)
+    emit({"type": "hello", "script": os.path.realpath(SCRIPT_MAIN)})
+    local.emit_keyboard()
+    local.emit_showing_desktop()
+
+    def on_stdin(fd, cond):
+        if cond & (GLib.IO_HUP | GLib.IO_ERR):
+            loop.quit()
+            return False
+        line = sys.stdin.readline()
+        if not line:
+            loop.quit()
+            return False
+        line = line.strip()
+        if line:
+            try:
+                cmd = json.loads(line)
+                if not (isinstance(cmd, dict) and (local.handle(cmd) or appmenu.handle(cmd))):
+                    bridge.push(line)
+            except ValueError:
+                emit({"type": "error", "message": "comando inválido: " + line})
+        return True
+
+    GLib.io_add_watch(sys.stdin.fileno(), GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_stdin)
+    try:
+        from gi.repository import GLibUnix
+        signal_add = GLibUnix.signal_add
+    except ImportError:
+        signal_add = GLib.unix_signal_add
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal_add(GLib.PRIORITY_DEFAULT, sig, lambda *_: (loop.quit(), False)[1])
+
+    try:
+        loop.run()
+    finally:
+        try:
+            scripting.unloadScript(PLUGIN)
+        except dbus.exceptions.DBusException:
+            pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

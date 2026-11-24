@@ -1,0 +1,1413 @@
+{
+  "ini": {
+    "kwinrc": [
+      [
+        "Compositing",
+        "AllowTearing",
+        "false"
+      ],
+      [
+        "Desktops",
+        "Number",
+        "4"
+      ],
+      [
+        "Desktops",
+        "Rows",
+        "1"
+      ],
+      [
+        "Effect-blur",
+        "BlurStrength",
+        "6"
+      ],
+      [
+        "Effect-blur",
+        "NoiseStrength",
+        "3"
+      ],
+      [
+        "Effect-cube",
+        "DistanceFactor",
+        "1.74"
+      ],
+      [
+        "Effect-kwin4_effect_geometry_change",
+        "Duration",
+        "250"
+      ],
+      [
+        "Effect-mouseclick",
+        "Color1",
+        "255,0,255"
+      ],
+      [
+        "Effect-mouseclick",
+        "ShowText",
+        "false"
+      ],
+      [
+        "Effect-overview",
+        "BorderActivate",
+        "9"
+      ],
+      [
+        "Effect-wobblywindows",
+        "Drag",
+        "92"
+      ],
+      [
+        "Effect-wobblywindows",
+        "MoveFactor",
+        "20"
+      ],
+      [
+        "Effect-wobblywindows",
+        "Stiffness",
+        "3"
+      ],
+      [
+        "Effect-wobblywindows",
+        "WobblynessLevel",
+        "3"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveOutlineAlpha",
+        "178"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveOutlinePalette",
+        "12"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveOutlineUseCustom",
+        "true"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveOutlineUsePalette",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveShadowAlpha",
+        "84"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveShadowPalette",
+        "11"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveShadowUseCustom",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ActiveShadowUsePalette",
+        "true"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "DisableOutlineTile",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "DisableRoundTile",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveCornerRadius",
+        "20"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveOutlineColor",
+        "51,62,80"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveOutlineIsGradient",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveOutlineUseCustom",
+        "true"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveOutlineUsePalette",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveShadowAlpha",
+        "41"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveShadowColor",
+        "255,255,255"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveShadowPalette",
+        "11"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveShadowSize",
+        "8"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveShadowUseCustom",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "InactiveShadowUsePalette",
+        "true"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "Inclusions",
+        ""
+      ],
+      [
+        "LowPan-Round-Corners",
+        "OutlineColor",
+        "255,255,255"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "OutlineIsGradient",
+        "false"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "OutlineThickness",
+        "1"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ShadowColor",
+        "161,198,255"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "ShadowSize",
+        "36"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "Size",
+        "20"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "Squircleness",
+        "0.7"
+      ],
+      [
+        "LowPan-Round-Corners",
+        "UseNativeDecorationShadows",
+        "true"
+      ],
+      [
+        "NightColor",
+        "Active",
+        "false"
+      ],
+      [
+        "NightColor",
+        "Mode",
+        "Constant"
+      ],
+      [
+        "NightColor",
+        "NightTemperature",
+        "5000"
+      ],
+      [
+        "Plugins",
+        "alt-f4-desktopEnabled",
+        "false"
+      ],
+      [
+        "Plugins",
+        "cubeEnabled",
+        "true"
+      ],
+      [
+        "Plugins",
+        "desktopchangeosdEnabled",
+        "true"
+      ],
+      [
+        "Plugins",
+        "fadedesktopEnabled",
+        "false"
+      ],
+      [
+        "Plugins",
+        "fullscreenEnabled",
+        "true"
+      ],
+      [
+        "Plugins",
+        "maximizeEnabled",
+        "true"
+      ],
+      [
+        "Plugins",
+        "mouseclickEnabled",
+        "true"
+      ],
+      [
+        "Plugins",
+        "slideEnabled",
+        "true"
+      ],
+      [
+        "Plugins",
+        "slidebackEnabled",
+        "true"
+      ],
+      [
+        "Plugins",
+        "wobblywindowsEnabled",
+        "true"
+      ],
+      [
+        "TabBox",
+        "LayoutName",
+        "lowpan-mac"
+      ],
+      [
+        "Windows",
+        "FocusPolicy",
+        "FocusFollowsMouse"
+      ],
+      [
+        "Windows",
+        "RollOverDesktops",
+        "true"
+      ]
+    ],
+    "breezerc": [
+      [
+        "Common",
+        "OutlineEnabled",
+        "true"
+      ],
+      [
+        "Common",
+        "OutlineIntensity",
+        "OutlineMedium"
+      ],
+      [
+        "Common",
+        "RoundedCorners",
+        "true"
+      ],
+      [
+        "Common",
+        "ShadowSize",
+        "ShadowMedium"
+      ],
+      [
+        "Common",
+        "ShadowStrength",
+        "255"
+      ],
+      [
+        "Windeco",
+        "ButtonSize",
+        "ButtonLarge"
+      ]
+    ],
+    "katerc": [
+      [
+        "General",
+        "Allow Tab Scrolling",
+        "true"
+      ],
+      [
+        "General",
+        "Auto Hide Tabs",
+        "false"
+      ],
+      [
+        "General",
+        "Close After Last",
+        "false"
+      ],
+      [
+        "General",
+        "Close documents with window",
+        "true"
+      ],
+      [
+        "General",
+        "Cycle To First Tab",
+        "true"
+      ],
+      [
+        "General",
+        "Days Meta Infos",
+        "30"
+      ],
+      [
+        "General",
+        "Diagnostics Limit",
+        "12000"
+      ],
+      [
+        "General",
+        "Diff Show Style",
+        "0"
+      ],
+      [
+        "General",
+        "Elide Tab Text",
+        "false"
+      ],
+      [
+        "General",
+        "Enable Context ToolView",
+        "false"
+      ],
+      [
+        "General",
+        "Expand Tabs",
+        "false"
+      ],
+      [
+        "General",
+        "Icon size for left and right sidebar buttons",
+        "32"
+      ],
+      [
+        "General",
+        "Modified Notification",
+        "false"
+      ],
+      [
+        "General",
+        "Mouse back button action",
+        "0"
+      ],
+      [
+        "General",
+        "Mouse forward button action",
+        "0"
+      ],
+      [
+        "General",
+        "Open New Tab To The Right Of Current",
+        "false"
+      ],
+      [
+        "General",
+        "Output History Limit",
+        "100"
+      ],
+      [
+        "General",
+        "Output With Date",
+        "false"
+      ],
+      [
+        "General",
+        "Quickopen Filter Mode",
+        "0"
+      ],
+      [
+        "General",
+        "Quickopen List Mode",
+        "true"
+      ],
+      [
+        "General",
+        "Recent File List Entry Count",
+        "10"
+      ],
+      [
+        "General",
+        "Restore Window Configuration",
+        "true"
+      ],
+      [
+        "General",
+        "SDI Mode",
+        "false"
+      ],
+      [
+        "General",
+        "Save Meta Infos",
+        "true"
+      ],
+      [
+        "General",
+        "Show Full Path in Title",
+        "false"
+      ],
+      [
+        "General",
+        "Show Menu Bar",
+        "true"
+      ],
+      [
+        "General",
+        "Show Status Bar",
+        "true"
+      ],
+      [
+        "General",
+        "Show Symbol In Navigation Bar",
+        "true"
+      ],
+      [
+        "General",
+        "Show Tab Bar",
+        "true"
+      ],
+      [
+        "General",
+        "Show Tabs Close Button",
+        "true"
+      ],
+      [
+        "General",
+        "Show Url Nav Bar",
+        "true"
+      ],
+      [
+        "General",
+        "Show output view for message type",
+        "1"
+      ],
+      [
+        "General",
+        "Show text for left and right sidebar",
+        "false"
+      ],
+      [
+        "General",
+        "Show welcome view for new window",
+        "false"
+      ],
+      [
+        "General",
+        "Startup Session",
+        "manual"
+      ],
+      [
+        "General",
+        "Stash new unsaved files",
+        "true"
+      ],
+      [
+        "General",
+        "Stash unsaved file changes",
+        "false"
+      ],
+      [
+        "General",
+        "Sync section size with tab positions",
+        "false"
+      ],
+      [
+        "General",
+        "Tab Double Click New Document",
+        "true"
+      ],
+      [
+        "General",
+        "Tab Middle Click Close Document",
+        "true"
+      ],
+      [
+        "General",
+        "Tabbar Tab Limit",
+        "0"
+      ],
+      [
+        "KTextEditor Document",
+        "Allow End of Line Detection",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Auto Detect Indent",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Auto Reload If Any External Changes Occurs",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Auto Reload If State Is In Version Control",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Auto Save",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Auto Save Interval",
+        "0"
+      ],
+      [
+        "KTextEditor Document",
+        "Auto Save On Focus Out",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "BOM",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Backup Local",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Backup Prefix",
+        ""
+      ],
+      [
+        "KTextEditor Document",
+        "Backup Remote",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Backup Suffix",
+        "~"
+      ],
+      [
+        "KTextEditor Document",
+        "Camel Cursor",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Encoding",
+        "UTF-8"
+      ],
+      [
+        "KTextEditor Document",
+        "End of Line",
+        "0"
+      ],
+      [
+        "KTextEditor Document",
+        "Indent On Backspace",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Indent On Tab",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Indent On Text Paste",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Indentation Mode",
+        "normal"
+      ],
+      [
+        "KTextEditor Document",
+        "Indentation Width",
+        "4"
+      ],
+      [
+        "KTextEditor Document",
+        "Keep Extra Spaces",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Line Length Limit",
+        "10000"
+      ],
+      [
+        "KTextEditor Document",
+        "Newline at End of File",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "On-The-Fly Spellcheck",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Overwrite Mode",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "PageUp/PageDown Moves Cursor",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Remove Spaces",
+        "1"
+      ],
+      [
+        "KTextEditor Document",
+        "ReplaceTabsDyn",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Show Spaces",
+        "0"
+      ],
+      [
+        "KTextEditor Document",
+        "Show Tabs",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Smart Home",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Swap Directory",
+        ""
+      ],
+      [
+        "KTextEditor Document",
+        "Swap File Mode",
+        "1"
+      ],
+      [
+        "KTextEditor Document",
+        "Swap Sync Interval",
+        "15"
+      ],
+      [
+        "KTextEditor Document",
+        "Tab Handling",
+        "2"
+      ],
+      [
+        "KTextEditor Document",
+        "Tab Width",
+        "4"
+      ],
+      [
+        "KTextEditor Document",
+        "Trailing Marker Size",
+        "1"
+      ],
+      [
+        "KTextEditor Document",
+        "Use Editor Config",
+        "true"
+      ],
+      [
+        "KTextEditor Document",
+        "Word Wrap",
+        "false"
+      ],
+      [
+        "KTextEditor Document",
+        "Word Wrap Column",
+        "80"
+      ],
+      [
+        "KTextEditor Editor",
+        "Encoding Prober Type",
+        "1"
+      ],
+      [
+        "KTextEditor Editor",
+        "Fallback Encoding",
+        "ISO 8859-15"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Animate Bracket Matching",
+        "false"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Auto Color Theme Selection",
+        "false"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Color Theme",
+        "toca"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Font",
+        "Hack,14,-1,5,50,0,0,0,0,0"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Line Height Multiplier",
+        "1"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Show Indentation Lines",
+        "false"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Show Whole Bracket Expression",
+        "false"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Text Font",
+        "Hack,14,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0"
+      ],
+      [
+        "KTextEditor Renderer",
+        "Text Font Features",
+        ""
+      ],
+      [
+        "KTextEditor Renderer",
+        "Word Wrap Marker",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Allow Mark Menu",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Auto Brackets",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Auto Center Lines",
+        "0"
+      ],
+      [
+        "KTextEditor View",
+        "Auto Completion",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Auto Completion Preselect First Entry",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Backspace Remove Composed Characters",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Bookmark Menu Sorting",
+        "0"
+      ],
+      [
+        "KTextEditor View",
+        "Bracket Match Preview",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Chars To Enclose Selection",
+        "<>(){}[]'\""
+      ],
+      [
+        "KTextEditor View",
+        "Default Mark Type",
+        "1"
+      ],
+      [
+        "KTextEditor View",
+        "Dynamic Word Wrap",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Dynamic Word Wrap Align Indent",
+        "80"
+      ],
+      [
+        "KTextEditor View",
+        "Dynamic Word Wrap At Static Marker",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Dynamic Word Wrap Indicators",
+        "1"
+      ],
+      [
+        "KTextEditor View",
+        "Dynamic Wrap not at word boundaries",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Enable Accessibility",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Enable Tab completion",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Enter To Insert Completion",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Fold First Line",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Folding Bar",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Folding Preview",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Icon Bar",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Input Mode",
+        "0"
+      ],
+      [
+        "KTextEditor View",
+        "Keyword Completion",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Line Modification",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Line Numbers",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Max Clipboard History Entries",
+        "20"
+      ],
+      [
+        "KTextEditor View",
+        "Maximum Search History Size",
+        "100"
+      ],
+      [
+        "KTextEditor View",
+        "Mouse Paste At Cursor Position",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Multiple Cursor Modifier",
+        "134217728"
+      ],
+      [
+        "KTextEditor View",
+        "Persistent Selection",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Scroll Bar Marks",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Scroll Bar Mini Map All",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Scroll Bar Mini Map Width",
+        "60"
+      ],
+      [
+        "KTextEditor View",
+        "Scroll Bar MiniMap",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Scroll Bar Preview",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Scroll Past End",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Search/Replace Flags",
+        "140"
+      ],
+      [
+        "KTextEditor View",
+        "Shoe Line Ending Type in Statusbar",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Show Documentation With Completion",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show File Encoding",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Focus Frame Around Editor",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Folding Icons On Hover Only",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Line Count",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Show Scrollbars",
+        "0"
+      ],
+      [
+        "KTextEditor View",
+        "Show Statusbar Dictionary",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Statusbar Highlighting Mode",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Statusbar Input Mode",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Statusbar Line Column",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Statusbar Tab Settings",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Show Word Count",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Smart Copy Cut",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Statusbar Line Column Compact Mode",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Text Drag And Drop",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "User Sets Of Chars To Enclose Selection",
+        ""
+      ],
+      [
+        "KTextEditor View",
+        "Vi Input Mode Steal Keys",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Vi Relative Line Numbers",
+        "false"
+      ],
+      [
+        "KTextEditor View",
+        "Word Completion",
+        "true"
+      ],
+      [
+        "KTextEditor View",
+        "Word Completion Minimal Word Length",
+        "3"
+      ],
+      [
+        "KTextEditor View",
+        "Word Completion Remove Tail",
+        "true"
+      ],
+      [
+        "Konsole",
+        "AutoSyncronize",
+        "true"
+      ],
+      [
+        "Konsole",
+        "AutoSyncronizeMode",
+        "0"
+      ],
+      [
+        "Konsole",
+        "KonsoleEscKeyBehaviour",
+        "true"
+      ],
+      [
+        "Konsole",
+        "KonsoleEscKeyExceptions",
+        "vi,vim,nvim,git"
+      ],
+      [
+        "Konsole",
+        "RemoveExtension",
+        "false"
+      ],
+      [
+        "Konsole",
+        "RunPrefix",
+        ""
+      ],
+      [
+        "Konsole",
+        "SetEditor",
+        "false"
+      ],
+      [
+        "filetree",
+        "editShade",
+        "183,220,246"
+      ],
+      [
+        "filetree",
+        "listMode",
+        "false"
+      ],
+      [
+        "filetree",
+        "middleClickToClose",
+        "false"
+      ],
+      [
+        "filetree",
+        "shadingEnabled",
+        "true"
+      ],
+      [
+        "filetree",
+        "showCloseButton",
+        "false"
+      ],
+      [
+        "filetree",
+        "showFullPathOnRoots",
+        "false"
+      ],
+      [
+        "filetree",
+        "showToolbar",
+        "true"
+      ],
+      [
+        "filetree",
+        "sortRole",
+        "0"
+      ],
+      [
+        "filetree",
+        "viewShade",
+        "211,190,222"
+      ],
+      [
+        "lspclient",
+        "AllowedServerCommandLines",
+        ""
+      ],
+      [
+        "lspclient",
+        "AutoHover",
+        "true"
+      ],
+      [
+        "lspclient",
+        "AutoImport",
+        "true"
+      ],
+      [
+        "lspclient",
+        "BlockedServerCommandLines",
+        "/usr/bin/qmlls6,/usr/lib/qt6/bin/qmlls"
+      ],
+      [
+        "lspclient",
+        "CompletionDocumentation",
+        "true"
+      ],
+      [
+        "lspclient",
+        "CompletionParens",
+        "true"
+      ],
+      [
+        "lspclient",
+        "Diagnostics",
+        "true"
+      ],
+      [
+        "lspclient",
+        "FormatOnSave",
+        "false"
+      ],
+      [
+        "lspclient",
+        "HighlightGoto",
+        "true"
+      ],
+      [
+        "lspclient",
+        "HighlightSymbol",
+        "true"
+      ],
+      [
+        "lspclient",
+        "IncrementalSync",
+        "false"
+      ],
+      [
+        "lspclient",
+        "InlayHints",
+        "false"
+      ],
+      [
+        "lspclient",
+        "Messages",
+        "true"
+      ],
+      [
+        "lspclient",
+        "ReferencesDeclaration",
+        "true"
+      ],
+      [
+        "lspclient",
+        "SemanticHighlighting",
+        "true"
+      ],
+      [
+        "lspclient",
+        "ServerConfiguration",
+        ""
+      ],
+      [
+        "lspclient",
+        "ShowCompletions",
+        "true"
+      ],
+      [
+        "lspclient",
+        "SignatureHelp",
+        "true"
+      ],
+      [
+        "lspclient",
+        "SymbolDetails",
+        "false"
+      ],
+      [
+        "lspclient",
+        "SymbolExpand",
+        "true"
+      ],
+      [
+        "lspclient",
+        "SymbolSort",
+        "false"
+      ],
+      [
+        "lspclient",
+        "SymbolTree",
+        "true"
+      ],
+      [
+        "lspclient",
+        "TypeFormatting",
+        "false"
+      ]
+    ],
+    "katevirc": [
+      [
+        "Kate Vi Input Mode Settings",
+        "Command Mode Mapping Keys",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Command Mode Mappings",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Command Mode Mappings Recursion",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Insert Mode Mapping Keys",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Insert Mode Mappings",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Insert Mode Mappings Recursion",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Macro Completions",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Macro Contents",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Macro Registers",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Map Leader",
+        "\\"
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Normal Mode Mapping Keys",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Normal Mode Mappings",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Normal Mode Mappings Recursion",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Visual Mode Mapping Keys",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Visual Mode Mappings",
+        ""
+      ],
+      [
+        "Kate Vi Input Mode Settings",
+        "Visual Mode Mappings Recursion",
+        ""
+      ]
+    ],
+    "kscreenlockerrc": [
+      [
+        "Daemon",
+        "Autolock",
+        "false"
+      ],
+      [
+        "Daemon",
+        "LockOnResume",
+        "false"
+      ],
+      [
+        "Daemon",
+        "Timeout",
+        "0"
+      ]
+    ]
+  },
+  "arquivos": [
+    "data:org.kde.syntax-highlighting/themes",
+    "kate/externaltools",
+    "kate/lspclient",
+    "kitty"
+  ],
+  "gsettings": {},
+  "uma_vez": [
+    "home:.zshrc",
+    "starship.toml",
+    "fastfetch",
+    "atuin/config.toml",
+    "data:kate/anonymous.katesession"
+  ]
+}

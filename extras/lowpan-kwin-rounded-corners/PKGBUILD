@@ -1,0 +1,65 @@
+# LowPan Shells — Rounded Corners com nomes próprios (2026-11-22), para conviver com o Rounded Corners que a pessoa já
+# tiver (pacote do AUR, make install…): o LowPan usa este, o Plasma continua com o da pessoa (system/lowpan-cantos-ambiente
+# troca no login e na troca LowPan↔Plasma). Mesmo código do upstream (matinlotfali/KDE-Rounded-Corners, GPL-3.0), com:
+#   plugin kwin4_effect_shapecorners → kwin4_effect_lowpancorners, módulo de configuração kwin_lowpancorners_config,
+#   grupo do kwinrc [Round-Corners] → [LowPan-Round-Corners], shaders lowpancorners*.frag, traduções lowpankcmcorners.
+# O lowpan-efeitos-kwin recompila daqui quando o KWin atualiza. Antes (até 2026-11-22): extras/kwin-effect-rounded-corners-git.
+
+_pkgname="lowpan-kwin-rounded-corners"
+pkgname=lowpan-kwin-rounded-corners
+pkgver=0.9.0.r6.gd6f8ade
+pkgrel=1
+pkgdesc="Rounded Corners do KDE com nomes próprios, para o ambiente LowPan do LowPan Shells (convive com o Rounded Corners original)"
+url="https://github.com/matinlotfali/KDE-Rounded-Corners"
+license=("GPL-3.0-only")
+arch=('x86_64')
+depends=('kwin')
+makedepends=('cmake' 'extra-cmake-modules' 'git' 'ninja' 'vulkan-headers')
+
+_pkgsrc="kde-rounded-corners"
+source=("$_pkgsrc"::"git+$url.git")
+sha256sums=("SKIP")
+
+prepare() {
+  cd "$_pkgsrc"
+  # Qt6 (o upstream tirou o cmake/qtversion.cmake em 2026; sem ele não há o que trocar)
+  if [[ -f cmake/qtversion.cmake ]]; then
+    sed -E -e 's&\bQUIET\b&REQUIRED&' -i cmake/qtversion.cmake
+  fi
+  # nomes próprios: plugin, módulo de configuração e o que referencia os dois
+  grep -rl --include=CMakeLists.txt --include='*.json' --include='*.cpp' --include='*.h' \
+      -e kwin4_effect_shapecorners -e kwin_shapecorners_config src | xargs -r sed -i \
+      -e 's/kwin4_effect_shapecorners/kwin4_effect_lowpancorners/g' \
+      -e 's/kwin_shapecorners_config/kwin_lowpancorners_config/g'
+  # grupo de configuração no kwinrc
+  sed -i 's/<group name="Round-Corners">/<group name="LowPan-Round-Corners">/' src/kcm/options.kcfg
+  # shaders instalados (os arquivos-fonte e os #include ficam como estão)
+  sed -i -e 's#BINARY_DIR}/shapecorners#BINARY_DIR}/lowpancorners#g' src/shaders/CMakeLists.txt
+  sed -i -e 's/"shapecorners_core.frag"/"lowpancorners_core.frag"/' -e 's/"shapecorners.frag"/"lowpancorners.frag"/' src/Shader.cpp
+  # traduções: domínio próprio (o .mo tem o nome do .po)
+  sed -i 's/TRANSLATION_DOMAIN=\\"kcmcorners\\"/TRANSLATION_DOMAIN=\\"lowpankcmcorners\\"/' src/kcm/CMakeLists.txt
+  for f in po/*/kcmcorners.po; do [[ -f "$f" ]] && mv "$f" "${f%/*}/lowpankcmcorners.po"; done
+  # nome na lista de efeitos do KDE
+  # nome na lista de efeitos do KDE; desligado por padrão: quem liga é o lowpan-cantos-ambiente (só no LowPan) — ligado por
+  # padrão, no Plasma (sem a chave no kwinrc) ele arredondaria junto com o da pessoa
+  sed -i -e 's/"Name": "Rounded Corners (formerly ShapeCorners)"/"Name": "Rounded Corners (LowPan Shells)"/' \
+         -e 's/"EnabledByDefault": true/"EnabledByDefault": false/' src/metadata.json
+  # nada pode ter sobrado com o nome original nos pontos que viram arquivo instalado
+  ! grep -rn -e kwin4_effect_shapecorners -e kwin_shapecorners_config -e '"Round-Corners"' src --include=CMakeLists.txt \
+      --include='*.json' --include='*.cpp' --include='*.kcfg'
+}
+
+pkgver() {
+  cd "$_pkgsrc"
+  git describe --long --tags --abbrev=7 --exclude='*[a-zA-Z][a-zA-Z]*' \
+    | sed -E 's/^[^0-9]*//;s/([^-]*-g)/r\1/;s/-/./g'
+}
+
+build() {
+  cmake -B build -S "$_pkgsrc" -G Ninja -Wno-dev
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

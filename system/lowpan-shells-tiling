@@ -1,0 +1,1103 @@
+#!/usr/bin/env python3
+"""LowPan Shells — liga/desliga seguro do LowPan Tiling (tiling do Niri no KWin; PLANEJAMENTO §21).
+
+  lowpan-shells-tiling status               mostra se está ligado, o que foi tomado e as teclas
+  lowpan-shells-tiling on  [--keep-config]  liga: toma teclas e ajustes do KDE e guarda o original
+  lowpan-shells-tiling off [--keep-config]  desliga: devolve exatamente o que tomou
+  lowpan-shells-tiling corners on|off       cantos de 16 px do iNiR (efeito Rounded Corners, se instalado)
+  lowpan-shells-tiling opacity on|off       janelas inativas a 90 % do iNiR (regra de janela própria)
+  lowpan-shells-tiling buttons on|off       barra de título sem botões enquanto o tiling estiver ligado
+  lowpan-shells-tiling sessao [--cedo]      aplica a escolha do ambiente desta sessão (no login e ao trocar)
+  lowpan-shells-tiling painel               segue a caixa "Tiling ligado neste ambiente" da tela do script
+                                            (Scripts do KWin › LowPan Tiling; chamado pelo lowpan-tiling-painel.path)
+
+Por ambiente (2026-11-22): o LowPan e o Plasma têm cada um a sua escolha. LowPan = lowpan.tiling do config.json (as
+Configurações); Plasma = ~/.local/state/lowpan-shells/tiling-plasma ("on"/"off", desligado se não existir).
+"on"/"off" valem para o ambiente desta sessão (marcador $XDG_RUNTIME_DIR/lowpan-sessao) e gravam a escolha dele;
+--ambiente iris|plasma escolhe outro (o do outro ambiente só grava a escolha e, no "on", deixa o motor pronto).
+"sessao --cedo" roda no login antes do KWin (só o interruptor do motor, sem D-Bus); "sessao", depois do KWin
+(lowpan-tiling-sessao.service), liga ou desliga de verdade (teclas, botões, encaixe) se a escolha for outra.
+
+Ligar:
+  - instala o motor (shell/kwin-tiling/pkg → ~/.local/share/kwin/scripts/lowpan-tiling) se faltar e o liga;
+  - instala o efeito Geometry Change (GPLv3, shell/kwin-tiling/third-party) se faltar e o liga (as colunas deslizam);
+  - desliga o Krohnkite, o center-new-windows e o encaixe ao arrastar até a borda (ElectricBorderMaximize/Tiling);
+  - dá as teclas do mapa abaixo às ações do LowPan Tiling; a tecla que já for de outra ação é tirada dela
+    (só aquela tecla) e guardada.
+Desligar: o motor fica parado na hora (kwinrc [Script-lowpan-tiling] lowpanActive=false; desligar um script KWin não
+o para até o próximo login, então ele continua carregado, sem fazer nada) e tudo o que foi tomado volta.
+O original fica em ~/.local/state/lowpan-shells/tiling-state.json (gravado só na primeira vez: ligar duas vezes
+não perde o original). --keep-config: não grava lowpan.tiling no config.json (as Configurações já gravaram).
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+import dbus
+
+# Idioma das mensagens: o do sistema (inglês por padrão; português em sistema pt), como o shell com o idioma em "auto"
+PT = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or "").lower().startswith("pt")
+
+
+def T(en, pt):
+    return pt if PT else en
+
+
+USAGE_EN = """LowPan Shells — safe on/off for LowPan Tiling (Niri-style tiling on KWin).
+
+  lowpan-shells-tiling status               shows whether it is on, what was taken and the keys
+  lowpan-shells-tiling on  [--keep-config]  turns it on: takes keys and KDE settings, saving the originals
+  lowpan-shells-tiling off [--keep-config]  turns it off: gives back exactly what it took
+  lowpan-shells-tiling corners on|off       iNiR's 16 px corners (Rounded Corners effect, if installed)
+  lowpan-shells-tiling opacity on|off       iNiR's inactive windows at 90 % (own window rule)
+  lowpan-shells-tiling buttons on|off       title bars without buttons while tiling is on
+  lowpan-shells-tiling sessao [--cedo]      applies this session's environment choice (login and switching)
+
+Per environment: LowPan = lowpan.tiling in config.json; Plasma = ~/.local/state/lowpan-shells/tiling-plasma (off by
+default). "on"/"off" act on this session's environment and save its choice; --ambiente iris|plasma picks the other.
+
+The originals are kept in ~/.local/state/lowpan-shells/tiling-state.json (written only the first time).
+--keep-config: don't write lowpan.tiling to config.json (Settings already did).
+"""
+
+HOME = os.path.expanduser("~")
+DATA = os.environ.get("XDG_DATA_HOME", HOME + "/.local/share")
+STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "lowpan-shells")
+STATE = os.path.join(STATE_DIR, "tiling-state.json")
+OLD_STATE = os.path.join(STATE_DIR, "tiling-taken-shortcuts.json")  # testes manuais de 2026-11-05/06
+CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME", HOME + "/.config"), "illogical-impulse", "config.json")
+PROJECT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+ENGINE_SRC = os.path.join(PROJECT, "shell", "kwin-tiling", "pkg")
+ENGINE_DST = os.path.join(DATA, "kwin", "scripts", "lowpan-tiling")
+GEOM_ID = "kwin4_effect_geometry_change"
+GEOM_SRC = os.path.join(PROJECT, "shell", "kwin-tiling", "third-party", GEOM_ID)
+GEOM_DST = os.path.join(DATA, "kwin", "effects", GEOM_ID)
+CORNERS_ID = "kwin4_effect_lowpancorners"  # nosso Rounded Corners (lowpan-kwin-rounded-corners; só usado se instalado)
+RULE_GROUP = "lowpan-tiling-inactive-opacity"  # kwinrulesrc: inativas a 90 % (como no iNiR)
+INSET_ID = "lowpan_drag_inset"  # recuo das outras janelas ao arrastar (efeito próprio, só visual)
+INSET_SRC = os.path.join(PROJECT, "shell", "kwin-tiling", "effect", INSET_ID)
+INSET_DST = os.path.join(DATA, "kwin", "effects", INSET_ID)
+
+META, SHIFT, CTRL, ALT = 0x10000000, 0x02000000, 0x04000000, 0x08000000
+LEFT, UP, RIGHT, DOWN = 0x01000012, 0x01000013, 0x01000014, 0x01000015
+K_J, K_K, K_F, K_T = 0x4A, 0x4B, 0x46, 0x54
+COMMA, MINUS, EQUAL, BR_L, BR_R = 0x2C, 0x2D, 0x3D, 0x5B, 0x5D
+PLUS, UNDERSCORE, PAREN_R, K_0 = 0x2B, 0x5F, 0x29, 0x30
+HOME_K, END_K, K_V, K_C, K_W = 0x01000010, 0x01000011, 0x56, 0x43, 0x57
+# Shift+tecla de símbolo chega ao KWin às vezes como o símbolo (Meta+Shift+= → Meta++; o próprio KDE registra o
+# Ampliar como Meta++ e Meta+=): as teclas com Shift vão nas duas formas.
+
+# ação do LowPan Tiling (componente kwin), texto, [(tecla, código)] — decisões do usuário em 2026-11-06 (§21.10)
+KEYMAP = [
+    ("LowPanTilingFocusLeft", T("Focus the column on the left", "Focar a coluna à esquerda"), [("Meta+←", META | LEFT)]),
+    ("LowPanTilingFocusRight", T("Focus the column on the right", "Focar a coluna à direita"), [("Meta+→", META | RIGHT)]),
+    ("LowPanTilingFocusUp", T("Up in the column / previous tab", "Subir na coluna / aba anterior"), [("Meta+↑", META | UP), ("Meta+K", META | K_K)]),
+    ("LowPanTilingFocusDown", T("Down in the column / next tab", "Descer na coluna / próxima aba"), [("Meta+↓", META | DOWN), ("Meta+J", META | K_J)]),
+    ("LowPanTilingShiftLeft", T("Move the column left", "Mover a coluna para a esquerda"), [("Meta+Shift+←", META | SHIFT | LEFT)]),
+    ("LowPanTilingShiftRight", T("Move the column right", "Mover a coluna para a direita"), [("Meta+Shift+→", META | SHIFT | RIGHT)]),
+    ("LowPanTilingShiftUp", T("Move the window up in the column", "Mover a janela para cima na coluna"), [("Meta+Shift+↑", META | SHIFT | UP)]),
+    ("LowPanTilingShiftDown", T("Move the window down in the column", "Mover a janela para baixo na coluna"), [("Meta+Shift+↓", META | SHIFT | DOWN)]),
+    ("LowPanTilingNiriConsumeLeft", T("Consume or expel (left)", "Juntar ou separar (esquerda)"), [("Meta+,", META | COMMA), ("Meta+[", META | BR_L)]),
+    ("LowPanTilingNiriConsumeRight", T("Consume or expel (right)", "Juntar ou separar (direita)"), [("Meta+]", META | BR_R)]),
+    ("LowPanTilingShrinkWidth", T("Column 10 % narrower", "Coluna 10 % mais estreita"), [("Meta+-", META | MINUS)]),
+    ("LowPanTilinggrowWidth", T("Column 10 % wider", "Coluna 10 % mais larga"), [("Meta+=", META | EQUAL)]),
+    ("LowPanTilingNiriToggleTabbed", T("Tabbed column", "Coluna em abas"), [("Meta+Alt+T", META | ALT | K_T)]),
+    ("LowPanTilingToggleFloat", T("Float the window", "Flutuar a janela"), [("Meta+F", META | K_F)]),
+    # 2026-11-06 (§21.12): alturas e ações do Niri que faltavam
+    ("LowPanTilingShrinkHeight", T("Window 10 % shorter", "Janela 10 % mais baixa"), [("Meta+Shift+-", META | SHIFT | MINUS), ("Meta+_", META | UNDERSCORE)]),
+    ("LowPanTilingGrowHeight", T("Window 10 % taller", "Janela 10 % mais alta"), [("Meta+Shift+=", META | SHIFT | EQUAL), ("Meta++", META | PLUS)]),
+    ("LowPanTilingNiriResetHeight", T("Reset heights in the column", "Altura automática na coluna"), [("Meta+Shift+0", META | SHIFT | K_0), ("Meta+)", META | PAREN_R)]),
+    ("LowPanTilingNiriFocusFirst", T("Focus the first column", "Focar a primeira coluna"), [("Meta+Home", META | HOME_K)]),
+    ("LowPanTilingNiriFocusLast", T("Focus the last column", "Focar a última coluna"), [("Meta+End", META | END_K)]),
+    ("LowPanTilingNiriMoveToFirst", T("Move the column to the start", "Levar a coluna ao começo"), [("Meta+Ctrl+Home", META | CTRL | HOME_K)]),
+    ("LowPanTilingNiriMoveToLast", T("Move the column to the end", "Levar a coluna ao fim"), [("Meta+Ctrl+End", META | CTRL | END_K)]),
+    ("LowPanTilingNiriFocusFloating", T("Switch focus between floating and tiled", "Alternar foco entre flutuantes e lado a lado"), [("Meta+Shift+V", META | SHIFT | K_V)]),
+    ("LowPanTilingNiriExpandColumn", T("Expand the column into the free space", "Expandir a coluna até o espaço livre"), [("Meta+Alt+F", META | ALT | K_F)]),
+    ("LowPanTilingNiriCenterColumn", T("Center the column", "Centralizar a coluna"), [("Meta+Shift+C", META | SHIFT | K_C)]),
+    ("LowPanTilingNiriCycleWidth", T("Cycle width (1/3, 1/2, 2/3)", "Alternar largura (1/3, 1/2, 2/3)"), [("Meta+Alt+W", META | ALT | K_W)]),
+    # 2026-11-06 (§21.19): vários monitores, teclas do iNiR (decisão do usuário: tirar as do KDE de trocar de área)
+    ("LowPanTilingNiriFocusMonitorLeft", T("Focus the monitor on the left", "Focar o monitor à esquerda"), [("Meta+Ctrl+←", META | CTRL | LEFT)]),
+    ("LowPanTilingNiriFocusMonitorRight", T("Focus the monitor on the right", "Focar o monitor à direita"), [("Meta+Ctrl+→", META | CTRL | RIGHT)]),
+    ("LowPanTilingNiriMoveColumnToMonitorLeft", T("Move the column to the monitor on the left", "Levar a coluna ao monitor à esquerda"), [("Meta+Ctrl+Shift+←", META | CTRL | SHIFT | LEFT)]),
+    ("LowPanTilingNiriMoveColumnToMonitorRight", T("Move the column to the monitor on the right", "Levar a coluna ao monitor à direita"), [("Meta+Ctrl+Shift+→", META | CTRL | SHIFT | RIGHT)]),
+]
+
+# kwinrc: (grupo, chave, valor com o tiling ligado). O original de cada uma é guardado.
+KWINRC = [
+    ("Plugins", "lowpan-tilingEnabled", "true"),
+    ("Plugins", "krohnkiteEnabled", "false"),
+    ("Plugins", "center-new-windowsEnabled", "false"),
+    ("Plugins", GEOM_ID + "Enabled", "true"),
+    ("Plugins", INSET_ID + "Enabled", "true"),
+    ("Windows", "ElectricBorderMaximize", "false"),
+    ("Windows", "ElectricBorderTiling", "false"),
+    ("Script-lowpan-tiling", "lowpanActive", "true"),
+    # Cantos arredondados (efeito Rounded Corners) NÃO entram aqui desde 2026-11-08: ficaram independentes do tiling,
+    # com página própria em Configurações › Janelas › Cantos arredondados (shell/scripts/kwin-corners.py, §21.23).
+    # Antes o "on" gravava os valores do iNiR e o "off" devolvia o original, apagando o que o usuário ajustasse.
+]
+
+NO_AUTOLOADING = 4
+SET_PRESENT = 2
+
+# atalho de app (como os da captura): o seletor de layouts do iNiR é do shell (§21.16)
+APPS = os.path.join(DATA, "applications")
+PICKER_DESKTOP = "lowpan-shells-tiling-layouts.desktop"
+PICKER_NAME = "LowPan Tiling — Layouts"
+PICKER_KEYS = [("Meta+Alt+Space", META | ALT | 0x20)]
+
+bus = dbus.SessionBus()
+
+
+class _KGA:
+    """kglobalaccel só quando usado: no login, antes do KWin (que o hospeda no Plasma 6), ele não existe."""
+    _i = None
+
+    def __getattr__(self, name):
+        if _KGA._i is None:
+            _KGA._i = dbus.Interface(bus.get_object("org.kde.kglobalaccel", "/kglobalaccel"), "org.kde.KGlobalAccel")
+        return getattr(_KGA._i, name)
+
+
+kga = _KGA()
+
+
+# ───────────────────────── kglobalaccel ─────────────────────────
+
+def action_id(comp, act, cfn="", afn=""):
+    return dbus.Array([comp, act, cfn, afn], signature="s")
+
+
+def keys_of(comp, act):
+    return [[int(k) for k in combo[0]] for combo in kga.shortcutKeys(action_id(comp, act))]
+
+
+def set_keys_flags(aid, combos, flags):
+    arr = dbus.Array([dbus.Struct([dbus.Array([dbus.Int32(k) for k in c], signature="i")], signature=None)
+                      for c in combos], signature="(ai)")
+    kga.setShortcutKeys(aid, arr, dbus.UInt32(flags))
+
+
+def set_keys(aid, combos):
+    set_keys_flags(aid, combos, NO_AUTOLOADING)
+
+
+def owner_of(code):
+    a = kga.action(dbus.Int32(code))
+    return [str(x) for x in a] if a else None
+
+
+# ───────────────────────── kwinrc ─────────────────────────
+
+def kread(group, key):
+    r = subprocess.run(["kreadconfig6", "--file", "kwinrc", "--group", group, "--key", key],
+                       capture_output=True, text=True)
+    v = r.stdout.strip()
+    # kreadconfig6 não distingue "vazio" de "ausente": ausente = None (devolver = apagar a chave)
+    return v if v != "" else None
+
+
+def kwrite(group, key, value):
+    if value is None:
+        subprocess.run(["kwriteconfig6", "--file", "kwinrc", "--group", group, "--key", key, "--delete"])
+    else:
+        subprocess.run(["kwriteconfig6", "--file", "kwinrc", "--group", group, "--key", key, value])
+
+
+def reconfigure():
+    subprocess.run(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def effect(method, eid):
+    try:
+        dbus.Interface(bus.get_object("org.kde.KWin", "/Effects"), "org.kde.kwin.Effects").get_dbus_method(method)(eid)
+    except dbus.DBusException:
+        pass
+
+
+def script_loaded(name):
+    try:
+        return bool(dbus.Interface(bus.get_object("org.kde.KWin", "/Scripting"), "org.kde.kwin.Scripting")
+                    .isScriptLoaded(name))
+    except dbus.DBusException:
+        return False
+
+
+def kwin_pid():
+    r = subprocess.run(["pidof", "kwin_wayland"], capture_output=True, text=True)
+    return r.stdout.strip().split(" ")[0] if r.stdout.strip() else ""
+
+
+# ───────────────────────── estado ─────────────────────────
+
+def load_state():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def save_state(st):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, STATE)
+
+
+def write_config(on):
+    try:
+        with open(CONFIG) as f:
+            cfg = json.load(f)
+    except (OSError, ValueError) as e:
+        print(T("warning: config.json not read (%s); lowpan.tiling not written", "aviso: config.json não lido (%s); lowpan.tiling não gravado") % e, file=sys.stderr)
+        return
+    cfg.setdefault("lowpan", {})
+    if cfg["lowpan"].get("tiling") == on:
+        return
+    cfg["lowpan"]["tiling"] = on
+    tmp = CONFIG + ".lowpan-tmp"
+    with open(tmp, "w") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, CONFIG)
+
+
+def read_lowpan_cfg():
+    try:
+        with open(CONFIG) as f:
+            return json.load(f).get("lowpan", {})
+    except (OSError, ValueError):
+        return {}
+
+
+# valores do iNiR para os cantos (§21.17), só como referência do padrão; quem grava agora é a página dos cantos
+CORNER_DEFAULTS = [
+    ("LowPan-Round-Corners", "Size", "16"), ("LowPan-Round-Corners", "InactiveCornerRadius", "16"),
+    ("LowPan-Round-Corners", "DisableRoundTile", "false"), ("LowPan-Round-Corners", "DisableOutlineTile", "false"),
+    ("LowPan-Round-Corners", "Inclusions", ""),
+    ("LowPan-Round-Corners", "Exclusions", "gamescope,dota2,lutris,net.lutris.Lutris,heroic,com.heroicgameslauncher.hgl,"
+                                    "org.prismlauncher.PrismLauncher,minecraft,wine,wine64,steam_app_"),
+]
+
+
+def is_corner_key(name):
+    """chave dos cantos guardada por versões antigas no estado (grupo/chave): o "off" não a devolve mais"""
+    # os dois efeitos: estados antigos guardaram o Rounded Corners original (até 2026-11-22 era o único)
+    return (name.startswith("Round-Corners/") or name.startswith("LowPan-Round-Corners/")
+            or name in ("Plugins/" + CORNERS_ID + "Enabled", "Plugins/kwin4_effect_shapecornersEnabled"))
+
+
+def apply_corners(on):
+    """Liga/desliga o efeito Rounded Corners (só [Plugins]; os ajustes ficam com a página dos cantos)."""
+    if not corners_installed():
+        return
+    kwrite("Plugins", CORNERS_ID + "Enabled", "true" if on else "false")
+    effect("loadEffect" if on else "unloadEffect", CORNERS_ID)
+    if on:
+        effect("reconfigureEffect", CORNERS_ID)
+
+
+# Botões da barra de título (2026-11-08, pedido do usuário): a opção do próprio KDE (Decorações da janela › Botões da
+# barra de título), que vale para todas as janelas. A barra fica; só os botões saem. O original vai em st["buttons"].
+BUTTON_KEYS = [("org.kde.kdecoration2", "ButtonsOnLeft"), ("org.kde.kdecoration2", "ButtonsOnRight")]
+
+
+def title_buttons(st, hide):
+    if hide:
+        if "buttons" not in st:
+            st["buttons"] = {g + "/" + k: kread(g, k) for g, k in BUTTON_KEYS}
+            save_state(st)
+        for g, k in BUTTON_KEYS:
+            kwrite(g, k, "")
+    elif "buttons" in st:
+        for name, value in st.pop("buttons").items():
+            g, k = name.split("/", 1)
+            kwrite(g, k, value)
+        save_state(st)
+
+
+def visual(cmd, on):
+    """corners: liga/desliga o efeito Rounded Corners (independente do tiling desde 2026-11-08).
+    opacity: inativas a 90 % (Configurações › Janelas › Tiling), vale enquanto o tiling estiver ligado."""
+    if cmd == "corners":
+        apply_corners(on)
+        print("%s %s" % (cmd, T("on", "ligado") if on else T("off", "desligado")))
+        return 0
+    st = load_state()
+    if st is None:
+        print(T("tiling is off: the choice applies when it is turned on", "tiling desligado: a escolha vale quando ele for ligado"))
+        return 0
+    if cmd == "buttons":
+        title_buttons(st, on)
+    else:
+        opacity_rule(on)
+    reconfigure()
+    print("%s %s" % (cmd, T("on", "ligado") if on else T("off", "desligado")))
+    return 0
+
+
+QUIET = False   # sessao: sem aviso na tela no login
+
+
+def notify(text):
+    if QUIET:
+        return
+    subprocess.run(["notify-send", "-a", "LowPan Shells", "-i", "view-grid", "Tiling", text],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ───────────────────────── ligar ─────────────────────────
+
+def first_state():
+    """O original de tudo, lido antes de mexer. Aproveita o registro dos testes manuais (tiling-taken-shortcuts.json)."""
+    st = {"kwinrc": {}, "shortcuts": {}, "installed": [], "kwinPid": ""}
+    old = {}
+    if os.path.exists(OLD_STATE):
+        with open(OLD_STATE) as f:
+            old = json.load(f)
+    for group, key, _ in KWINRC:
+        name = group + "/" + key
+        st["kwinrc"][name] = old["kwinrc"][name] if name in old.get("kwinrc", {}) else kread(group, key)
+    # teclas que os testes tiraram do Krohnkite: o original é o do JSON antigo, não o de agora (vazio)
+    for act, combos in old.items():
+        if act != "kwinrc":
+            st["shortcuts"]["kwin\t" + act] = combos
+    # as próprias ações do LowPan Tiling não têm tecla padrão: ao desligar ficam sem tecla
+    return st
+
+
+def take_key(st, code, mine):
+    """Tira só esta tecla de quem a tiver (guardando as teclas originais dessa ação uma vez)."""
+    owner = owner_of(code)
+    if not owner or (owner[0] == "kwin" and owner[1] == mine):
+        return
+    comp, act = owner[0], owner[1]
+    k = comp + "\t" + act
+    current = keys_of(comp, act)
+    if k not in st["shortcuts"]:
+        st["shortcuts"][k] = current
+    rest = [c for c in current if c[0] != code]
+    set_keys(action_id(comp, act), rest)
+    print(T("taken   %s from \"%s\" (%s)", "tomado  %s de \"%s\" (%s)") % (key_text(code), owner[3] or act, comp))
+
+
+def key_text(code):
+    for _a, _t, keys in KEYMAP:
+        for text, c in keys:
+            if c == code:
+                return text
+    return hex(code)
+
+
+def picker_on(st):
+    os.makedirs(APPS, exist_ok=True)
+    for text, code in PICKER_KEYS:
+        owner = owner_of(code)
+        if owner and owner[0] != PICKER_DESKTOP:  # já é dele (rodar o "on" de novo)
+            take_key(st, code, "")
+    with open(os.path.join(APPS, PICKER_DESKTOP), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=%s\nExec=/usr/bin/qs -c lowpan-shells ipc call tiling toggle\n"
+                "Icon=view-grid\nTerminal=false\nNoDisplay=true\nX-KDE-Shortcuts=%s\n"
+                % (PICKER_NAME, ",".join(t for t, _ in PICKER_KEYS)))
+    aid = action_id(PICKER_DESKTOP, "_launch", PICKER_NAME, PICKER_NAME)
+    kga.doRegister(aid)
+    # SetPresent: sem ele a ação fica inativa e o KWin não escuta a tecla
+    set_keys_flags(aid, [[c, 0, 0, 0] for _, c in PICKER_KEYS], SET_PRESENT)
+    print(T("ok      %s → layout picker", "ok      %s → seletor de layouts") % ", ".join(t for t, _ in PICKER_KEYS))
+
+
+def picker_off():
+    try:
+        kga.unregister(PICKER_DESKTOP, "_launch")
+    except dbus.DBusException:
+        pass
+    path = os.path.join(APPS, PICKER_DESKTOP)
+    if os.path.exists(path):
+        os.remove(path)
+
+
+def corners_installed():
+    return any(os.path.exists(os.path.join(d, "kwin/effects/plugins", CORNERS_ID + ".so"))
+               for d in ("/usr/lib/qt6/plugins", "/usr/lib64/qt6/plugins")) or \
+        os.path.exists(os.path.join(DATA, "kwin", "effects", CORNERS_ID))
+
+
+def rule_write(key, value):
+    cmd = ["kwriteconfig6", "--file", "kwinrulesrc", "--group", RULE_GROUP, "--key", key]
+    subprocess.run(cmd + (["--delete"] if value is None else [value]))
+
+
+def rule_order():
+    r = subprocess.run(["kreadconfig6", "--file", "kwinrulesrc", "--group", "General", "--key", "Order"],
+                       capture_output=True, text=True)
+    return [x for x in r.stdout.strip().split(",") if x]
+
+
+def opacity_rule(on):
+    """Regra de janela própria (não mexe nas do usuário): janelas normais inativas a 90 %."""
+    keys = {"Description": "LowPan Tiling: janelas inativas a 90 % (como no iNiR)", "types": "1",
+            "wmclassmatch": "0", "opacityinactive": "90", "opacityinactiverule": "2"}
+    order = rule_order()
+    if on:
+        for k, v in keys.items():
+            rule_write(k, v)
+        if RULE_GROUP not in order:
+            order.append(RULE_GROUP)
+    else:
+        for k in keys:
+            rule_write(k, None)
+        order = [x for x in order if x != RULE_GROUP]
+    subprocess.run(["kwriteconfig6", "--file", "kwinrulesrc", "--group", "General", "--key", "Order", ",".join(order)])
+
+
+def krohnkite_rodando():
+    """O Krohnkite desta sessão NÃO para ao ser desligado (notebook, 2026-11-22: desligado pelo switch, seguiu dispondo
+    as janelas no layout dele e brigando com o motor; a correção de 2026-11-06 não se confirmou). Só um novo login o
+    tira. Então, com ele rodando, ligar no meio da sessão fica para o próximo login (o "sessao --cedo" acerta o kwinrc
+    antes do KWin). Avisa uma vez por sessão (marcador em $XDG_RUNTIME_DIR)."""
+    rt = os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
+    vivo = False
+    try:
+        with open(os.path.join(rt, KK_VIVO)) as f:
+            vivo = f.read().strip() == kwin_pid()   # desligado nesta sessão, mas ainda vivo (isScriptLoaded = false)
+    except OSError:
+        pass
+    if not vivo and not script_loaded("krohnkite"):
+        return False
+    marca = os.path.join(rt, "lowpan-tiling-espera-krohnkite")
+    msg = T("The Krohnkite of this session keeps running until you log out: LowPan Tiling takes over at the next login.",
+            "O Krohnkite desta sessão só para ao sair: o LowPan Tiling entra no próximo login.")
+    print(msg)
+    if not os.path.exists(marca):
+        open(marca, "w").close()
+        subprocess.run(["notify-send", "-a", "LowPan Shells", "-i", "view-grid", "Tiling", msg],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
+
+
+def to_on():
+    if krohnkite_rodando():
+        return 0
+    st = load_state()
+    # "parcial": o login (sessao --cedo) já guardou o original e acertou o kwinrc antes do KWin; falta o resto
+    fresh = st is None or bool(st.pop("parcial", False))
+    if st is None:
+        st = first_state()
+
+    # 1) motor
+    if not os.path.exists(os.path.join(ENGINE_DST, "metadata.json")):
+        if not os.path.exists(os.path.join(ENGINE_SRC, "metadata.json")):
+            print(T("error: engine not built (%s). Run shell/kwin-tiling/lowpan-install.sh", "erro: motor não compilado (%s). Rode shell/kwin-tiling/lowpan-install.sh") % ENGINE_SRC, file=sys.stderr)
+            return 1
+        shutil.copytree(ENGINE_SRC, ENGINE_DST)
+        st["installed"].append(ENGINE_DST)
+        print(T("engine installed in %s", "instalado o motor em %s") % ENGINE_DST)
+
+    # 2) Geometry Change (só se não houver um do sistema ou do usuário)
+    if not os.path.exists(GEOM_DST) and not os.path.exists("/usr/share/kwin/effects/" + GEOM_ID):
+        shutil.copytree(GEOM_SRC, GEOM_DST)
+        st["installed"].append(GEOM_DST)
+        print(T("Geometry Change effect installed in %s", "instalado o efeito Geometry Change em %s") % GEOM_DST)
+
+    if not os.path.exists(os.path.join(INSET_DST, "metadata.json")) and os.path.exists(INSET_SRC):
+        shutil.copytree(INSET_SRC, INSET_DST)
+        st["installed"].append(INSET_DST)
+        print(T("drag inset effect installed in %s", "instalado o efeito do recuo em %s") % INSET_DST)
+    engine_loaded = script_loaded("lowpan-tiling")
+    if fresh:
+        st["kwinPid"] = kwin_pid()
+    save_state(st)  # antes de mexer: se algo falhar no meio, o desligar ainda devolve
+
+    # 3) kwinrc (chave nova desde o 1º "on": guarda o original agora)
+    for group, key, _v in KWINRC:
+        if group + "/" + key not in st["kwinrc"]:
+            st["kwinrc"][group + "/" + key] = kread(group, key)
+    save_state(st)
+    cfg = read_lowpan_cfg()
+    for group, key, value in KWINRC:
+        kwrite(group, key, value)
+    # visuais do iNiR, como escolhidos em Configurações › Janelas › Tiling (inativas translúcidas: desligado por padrão)
+    opacity_rule(bool(cfg.get("tilingInactiveOpacity", False)))
+    title_buttons(st, bool(cfg.get("tilingNoTitleButtons", True)))
+
+    # 4) teclas
+    for act, text, keys in KEYMAP:
+        for _t, code in keys:
+            take_key(st, code, act)
+        save_state(st)
+        aid = action_id("kwin", act, "KWin", "LowPan Tiling: " + text)
+        # numa conta nova o motor ainda não rodou (só carrega no próximo login): a ação não existe no kglobalaccel e o
+        # setShortcutKeys é ignorado em silêncio — no login o motor a registrava com a tecla padrão dele (nenhuma) e o
+        # Meta+F & cia. não faziam nada (5ª rodada do teste 3, 2026-11-21). Registrar antes faz a tecla ficar gravada.
+        kga.doRegister(aid)
+        set_keys(aid, [[c, 0, 0, 0] for _t, c in keys])
+        if not kga.shortcutKeys(aid):
+            print(T("error: kglobalaccel did not keep %s", "erro: o kglobalaccel não guardou %s") % text, file=sys.stderr)
+        print("ok      %s → %s" % (", ".join(t for t, _ in keys), text))
+    picker_on(st)
+    save_state(st)
+    subprocess.run(["kbuildsycoca6"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if os.path.exists(OLD_STATE):
+        os.remove(OLD_STATE)
+
+    # esperas de fechar/minimizar pelo efeito ligado (o shell regrava ao trocar de efeito na página Janelas)
+    subprocess.run([sys.executable, os.path.join(PROJECT, "shell", "scripts", "kwin-animations.py"), "tiling-delays"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    reconfigure()
+    effect("loadEffect", GEOM_ID)
+    effect("loadEffect", INSET_ID)
+    marcar_painel(True)
+    msg = T("Tiling on.", "Tiling ligado.")
+    if not engine_loaded and not script_loaded("lowpan-tiling"):
+        msg += T(" Log out and back in for the engine to load.", " Saia e entre de novo para o motor carregar.")
+    print(msg)
+    notify(msg)
+    return 0
+
+
+# ───────────────────────── desligar ─────────────────────────
+
+def to_off():
+    st = load_state()
+    # o motor para na hora, mesmo sem estado guardado
+    kwrite("Script-lowpan-tiling", "lowpanActive", "false")
+    for act, text, _keys in KEYMAP:
+        set_keys(action_id("kwin", act, "KWin", "LowPan Tiling: " + text), [])
+    picker_off()
+    marcar_painel(False)
+    if st is None:
+        reconfigure()
+        print(T("nothing saved to give back (tiling was not turned on by this command)", "nada guardado para devolver (o tiling não foi ligado por este comando)"))
+        return 0
+
+    for k, combos in st.get("shortcuts", {}).items():
+        comp, act = k.split("\t", 1)
+        try:
+            set_keys(action_id(comp, act), combos)
+            print(T("given back %s (%s)", "devolvido %s (%s)") % (act, comp))
+        except dbus.DBusException as e:
+            print(T("warning: %s not given back: %s", "aviso: %s não devolvido: %s") % (act, e), file=sys.stderr)
+
+    for name, value in st.get("kwinrc", {}).items():
+        group, key = name.split("/", 1)
+        if key == "lowpanActive":
+            continue  # fica false: o motor continua carregado até o próximo login, parado
+        if key == "lowpan-tilingEnabled":
+            continue  # carregado mas parado; tirar daqui só ao desinstalar (evita dois motores na mesma sessão)
+        if is_corner_key(name):
+            continue  # cantos: guardados por versões antigas; agora ficam como a página dos cantos deixou
+        if key == "krohnkiteEnabled" and kk_guardado():
+            continue  # com o perfil do Krohnkite ele nunca religa (só o desinstalar): carregado, não para mais
+        kwrite(group, key, value)
+
+    effect("unloadEffect", INSET_ID)
+    opacity_rule(False)
+    title_buttons(st, False)
+    for path in st.get("installed", []):
+        if path == INSET_DST:
+            shutil.rmtree(path, ignore_errors=True)
+    geom_was = st.get("kwinrc", {}).get("Plugins/" + GEOM_ID + "Enabled")
+    for path in st.get("installed", []):
+        if path == GEOM_DST:
+            effect("unloadEffect", GEOM_ID)
+            shutil.rmtree(path, ignore_errors=True)
+            print(T("Geometry Change effect removed (we had installed it)", "removido o efeito Geometry Change (fomos nós que instalamos)"))
+    if geom_was != "true":
+        effect("unloadEffect", GEOM_ID)
+
+    os.remove(STATE)
+    reconfigure()
+    msg = T("Tiling off: KDE keys and settings given back.", "Tiling desligado: teclas e ajustes do KDE devolvidos.")
+    print(msg)
+    notify(msg)
+    return 0
+
+
+# ───────────────────────── perfil do Krohnkite (Plasma) ─────────────────────────
+#
+# 2026-11-22 (notebook, decisão do dono): quem usava o Krohnkite continua com o tiling dele no Plasma, mas pelo NOSSO
+# motor. O Krohnkite não pode carregar: desligado na sessão ele NÃO para (nem com unloadScript) e brigaria com o motor
+# ao trocar para o LowPan. O motor é um fork dele (mesmas chaves no kwinrc, mesmas ações com o prefixo LowPanTiling), então:
+#   capturar  (instalador) lê [Script-krohnkite] + os padrões do main.xml do Krohnkite + as teclas das ações Krohnkite*
+#             (pelo kglobalaccel: o arquivo tem escapes ambíguos) → tiling-krohnkite.json; desliga o Krohnkite no
+#             kwinrc (sem reconfigure: vale no próximo login) e, se ele estava ligado, liga o tiling no Plasma.
+#   kk_on     (Plasma) guarda os valores do LowPan dessas chaves, grava os do Krohnkite (+ niriLayoutOrder=0), soma 1 em
+#             lowpanProfileGen (o motor refaz layouts e espaços) e dá às ações LowPanTiling<X> as teclas de Krohnkite<X>
+#             (tomando-as de quem as tiver, como o "on").  kk_off desfaz.  --cedo: só o kwinrc (antes do KWin).
+#   restaurar (desinstalar) kk_off + o krohnkiteEnabled original de volta.
+KK_STATE = os.path.join(STATE_DIR, "tiling-krohnkite.json")
+KK_VIVO = "lowpan-tiling-krohnkite-vivo"   # em $XDG_RUNTIME_DIR: pid do KWin em que o Krohnkite carregou
+
+
+def kk_load():
+    try:
+        with open(KK_STATE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def kk_save(kk):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = KK_STATE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(kk, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, KK_STATE)
+
+
+def kk_pacote():
+    for base in (os.path.join(DATA, "kwin", "scripts", "krohnkite"), "/usr/share/kwin/scripts/krohnkite"):
+        if os.path.exists(os.path.join(base, "contents", "config", "main.xml")):
+            return base
+    return None
+
+
+def kk_padroes(pacote):
+    """{chave: padrão} do main.xml do Krohnkite (o padrão vale quando a pessoa não mexeu na chave)."""
+    import xml.etree.ElementTree as ET
+    out = {}
+    for e in ET.parse(os.path.join(pacote, "contents", "config", "main.xml")).getroot().iter():
+        if e.tag.endswith("entry") and e.get("name"):
+            d = [c for c in e if c.tag.endswith("default")]
+            out[e.get("name")] = (d[0].text or "") if d else ""
+    return out
+
+
+def kk_ler():
+    """O perfil do Krohnkite desta conta: {"config": {...}, "teclas": {"FocusDown": [[código,0,0,0]], ...}}."""
+    pacote = kk_pacote()
+    if not pacote:
+        return None
+    config = {}
+    for chave, padrao in kk_padroes(pacote).items():
+        v = kread("Script-krohnkite", chave)
+        config[chave] = padrao if v is None else v
+    config["niriLayoutOrder"] = "0"   # o layout do Niri é só do LowPan
+    # janelas que o motor nunca toca: a lista padrão do Krohnkite + a da pessoa (até 2026-11-22 o instalador gravava
+    # só "quickshell" no Krohnkite quando a chave não existia, e a lista padrão sumia) + o quickshell
+    lista = [c.strip() for c in (padrao_ignore(pacote) + "," + config.get("ignoreClass", "") + ",quickshell").split(",")]
+    config["ignoreClass"] = ",".join(dict.fromkeys(c for c in lista if c))
+    teclas = {}
+    for nome in kk_acoes(pacote):
+        try:
+            k = keys_of("kwin", "Krohnkite" + nome)
+        except dbus.DBusException:
+            k = []
+        if k:
+            teclas[nome] = k
+    return {"config": config, "teclas": teclas}
+
+
+def padrao_ignore(pacote):
+    return kk_padroes(pacote).get("ignoreClass", "")
+
+
+def kk_acoes(pacote):
+    import re
+    with open(os.path.join(pacote, "contents", "ui", "shortcuts.qml")) as f:
+        return [n for n in re.findall(r'name:\s*"Krohnkite([^"]+)"', f.read())]
+
+
+def kk_marcar_vivo():
+    if script_loaded("krohnkite"):
+        rt = os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
+        with open(os.path.join(rt, KK_VIVO), "w") as f:
+            f.write(kwin_pid())
+
+
+def kk_capturar():
+    perfil = kk_ler()
+    if perfil is None:
+        print(T("Krohnkite not installed: nothing to capture", "Krohnkite não instalado: nada a capturar"))
+        return 0
+    kk = kk_load() or {}
+    kk_marcar_vivo()
+    if "original" not in kk:
+        # numa sessão do LowPan o tiling já desligou o Krohnkite: o original da pessoa está no estado dele (notebook,
+        # 2026-11-22: lido "false" aqui, o tiling do Plasma não ligava)
+        orig = kread("Plugins", "krohnkiteEnabled")
+        st = load_state()
+        if st is not None and "Plugins/krohnkiteEnabled" in st.get("kwinrc", {}):
+            orig = st["kwinrc"]["Plugins/krohnkiteEnabled"]
+        kk["original"] = {"enabled": orig}
+    kk["config"], kk["teclas"] = perfil["config"], perfil["teclas"]
+    kk_save(kk)
+    kwrite("Plugins", "krohnkiteEnabled", "false")   # sem reconfigure: o desta sessão segue até o próximo login
+    if kk["original"]["enabled"] == "true":
+        gravar_preferencia("plasma", True)
+    print(T("Krohnkite profile captured (%d settings, %d keys); Plasma tiling: %s",
+            "perfil do Krohnkite capturado (%d ajustes, %d teclas); tiling no Plasma: %s") % (
+        len(kk["config"]), len(kk["teclas"]),
+        T("on", "ligado") if preferencia("plasma") else T("off", "desligado")))
+    return 0
+
+
+def kk_gen():
+    try:
+        g = int(kread("Script-lowpan-tiling", "lowpanProfileGen") or 0)
+    except ValueError:
+        g = 0
+    kwrite("Script-lowpan-tiling", "lowpanProfileGen", str(g + 1))
+
+
+def kk_on(cedo=False):
+    kk = kk_load()
+    if not kk or "config" not in kk:
+        return 1
+    if not cedo and krohnkite_rodando():
+        return 0
+    at = kk.get("ativo")
+    if at is None:
+        at = kk["ativo"] = {"iris": {c: kread("Script-lowpan-tiling", c) for c in kk["config"]},
+                            "config": False, "teclas": None}
+        kk_save(kk)
+    if not at["config"]:
+        for c, v in kk["config"].items():
+            kwrite("Script-lowpan-tiling", c, v)
+        kwrite("Plugins", "krohnkiteEnabled", "false")
+        kwrite("Plugins", "lowpan-tilingEnabled", "true")
+        kwrite("Script-lowpan-tiling", "lowpanActive", "true")
+        kk_gen()
+        at["config"] = True
+        kk_save(kk)
+    else:
+        kwrite("Plugins", "krohnkiteEnabled", "false")
+        kwrite("Script-lowpan-tiling", "lowpanActive", "true")
+    if os.path.exists(ENGINE_DST):
+        marcar_painel(True)
+    if cedo:
+        return 0
+    if not os.path.exists(os.path.join(ENGINE_DST, "metadata.json")) and os.path.exists(os.path.join(ENGINE_SRC, "metadata.json")):
+        shutil.copytree(ENGINE_SRC, ENGINE_DST)
+    if at["teclas"] is None:
+        tomadas = {"shortcuts": {}}
+        for nome, combos in kk["teclas"].items():
+            for combo in combos:
+                take_key(tomadas, combo[0], "LowPanTiling" + nome)
+            aid = action_id("kwin", "LowPanTiling" + nome)
+            kga.doRegister(aid)
+            set_keys(aid, combos)
+        at["teclas"] = tomadas["shortcuts"]
+        kk_save(kk)
+    reconfigure()
+    msg = T("Tiling on (Krohnkite settings).", "Tiling ligado (ajustes do Krohnkite).")
+    print(msg)
+    notify(msg)
+    return 0
+
+
+def kk_off(cedo=False):
+    kk = kk_load()
+    at = (kk or {}).get("ativo")
+    if not at:
+        return 0
+    if at["config"]:
+        for c, v in at["iris"].items():
+            kwrite("Script-lowpan-tiling", c, v)
+        kwrite("Script-lowpan-tiling", "lowpanActive", "false")
+        kk_gen()
+        at["config"] = False
+        kk_save(kk)
+    if os.path.exists(ENGINE_DST):
+        marcar_painel(False)
+    if cedo:
+        return 0
+    if at["teclas"] is not None:
+        for nome in kk.get("teclas", {}):
+            set_keys(action_id("kwin", "LowPanTiling" + nome), [])
+        for k, combos in at["teclas"].items():
+            comp, act = k.split("\t", 1)
+            try:
+                set_keys(action_id(comp, act), combos)
+            except dbus.DBusException:
+                pass
+        at["teclas"] = None
+    del kk["ativo"]
+    kk_save(kk)
+    reconfigure()
+    msg = T("Tiling off (Krohnkite settings put away).", "Tiling desligado (ajustes do Krohnkite guardados).")
+    print(msg)
+    notify(msg)
+    return 0
+
+
+def kk_restaurar():
+    """Desinstalar: tira o perfil e devolve o krohnkiteEnabled que a pessoa tinha (o Krohnkite volta a carregar)."""
+    kk = kk_load()
+    if not kk:
+        return 0
+    kk_off()
+    kk = kk_load() or {}
+    orig = kk.get("original", {}).get("enabled")
+    kwrite("Plugins", "krohnkiteEnabled", orig)
+    os.remove(KK_STATE)
+    reconfigure()
+    print(T("Krohnkite given back (krohnkiteEnabled=%s)", "Krohnkite devolvido (krohnkiteEnabled=%s)") % orig)
+    return 0
+
+
+def kk_guardado():
+    """Há perfil do Krohnkite: ele fica desligado em qualquer ambiente até o desinstalar (notebook, 2026-11-22: o
+    to_off do switch devolvia krohnkiteEnabled=true + reconfigure, o Krohnkite carregava e ficava preso na sessão)."""
+    return bool((kk_load() or {}).get("config"))
+
+
+def kk_ativo():
+    return bool((kk_load() or {}).get("ativo"))
+
+
+def modo_desejado(amb):
+    if not preferencia(amb):
+        return "off"
+    if amb == "plasma" and (kk_load() or {}).get("config"):
+        return "krohnkite"
+    return "lowpan"
+
+
+def ir_para(modo):
+    """Sai do modo atual (o que não for o pedido) e entra no pedido. Ordem: tirar teclas antes de dar outras."""
+    if modo != "krohnkite" and kk_ativo():
+        kk_off()
+    st = load_state()
+    if modo != "lowpan" and st is not None:
+        to_off()
+    if modo == "krohnkite":
+        return kk_on()
+    if modo == "lowpan":
+        st = load_state()
+        if st is None or st.get("parcial"):
+            return to_on()
+        kwrite("Script-lowpan-tiling", "lowpanActive", "true")
+        reconfigure()
+        marcar_painel(True)
+    return 0
+
+
+# ───────────────────────── por ambiente ─────────────────────────
+
+PLASMA_PREF = os.path.join(STATE_DIR, "tiling-plasma")
+
+
+def ambiente():
+    """iris/plasma desta sessão: o marcador do login (o mesmo do lowpan-sessao-login); sem ele, o shell rodando."""
+    rt = os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
+    try:
+        with open(os.path.join(rt, "lowpan-sessao")) as f:
+            parts = f.read().split()
+        sid, mine = (parts[1] if len(parts) > 1 else ""), os.environ.get("XDG_SESSION_ID", "")
+        if parts and parts[0] in ("iris", "plasma") and not (sid and mine and sid != mine):
+            return parts[0]
+    except OSError:
+        pass
+    r = subprocess.run(["systemctl", "--user", "is-active", "-q", "lowpan-shells.service"])
+    return "iris" if r.returncode == 0 else "plasma"
+
+
+def preferencia(amb):
+    if amb == "iris":
+        return bool(read_lowpan_cfg().get("tiling", False))
+    try:
+        with open(PLASMA_PREF) as f:
+            return f.read().strip() == "on"
+    except OSError:
+        return False
+
+
+def gravar_preferencia(amb, on):
+    if amb == "iris":
+        write_config(on)
+        return
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(PLASMA_PREF, "w") as f:
+        f.write("on\n" if on else "off\n")
+
+
+def motor_pronto():
+    """Escolha "ligado" para o outro ambiente: o motor instalado e habilitado (carrega no próximo login), parado aqui."""
+    if not os.path.exists(os.path.join(ENGINE_DST, "metadata.json")) and os.path.exists(os.path.join(ENGINE_SRC, "metadata.json")):
+        shutil.copytree(ENGINE_SRC, ENGINE_DST)
+        print(T("engine installed in %s", "instalado o motor em %s") % ENGINE_DST)
+    if load_state() is None:
+        kwrite("Script-lowpan-tiling", "lowpanActive", "false")
+    kwrite("Plugins", "lowpan-tilingEnabled", "true")
+
+
+def marcar_painel(on):
+    """A caixa da tela do script (kcfg_lowpanToggle) mostra o estado deste ambiente."""
+    kwrite("Script-lowpan-tiling", "lowpanToggle", "true" if on else "false")
+
+
+def travar():
+    """Um de cada vez: o painel (vigia do kwinrc) e o sessao do login não podem ligar/desligar juntos."""
+    import fcntl
+    os.makedirs(STATE_DIR, exist_ok=True)
+    f = open(os.path.join(STATE_DIR, "tiling.lock"), "w")
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
+def painel():
+    """Caixa marcada/desmarcada na tela do script + Aplicar → liga/desliga de verdade no ambiente desta sessão."""
+    try:
+        if not bus.name_has_owner("org.kde.kglobalaccel"):
+            return 0   # login, antes do KWin: quem age é o sessao
+    except dbus.DBusException:
+        return 0
+    trava = travar()
+    st = load_state()
+    if st is not None and st.get("parcial"):
+        return 0       # login no meio (sessao --cedo feito, sessao ainda não)
+    quer = kread("Script-lowpan-tiling", "lowpanToggle") == "true"
+    amb = ambiente()
+    if kk_ativo():
+        atual = "krohnkite"
+    elif st is not None and kread("Script-lowpan-tiling", "lowpanActive") != "false":
+        atual = "lowpan"
+    else:
+        atual = "off"
+    alvo = ("krohnkite" if amb == "plasma" and (kk_load() or {}).get("config") else "lowpan") if quer else "off"
+    if alvo == atual:
+        return 0
+    rc = ir_para(alvo)
+    if rc == 0:
+        gravar_preferencia(amb, quer)
+    del trava
+    return rc
+
+
+def esperar_kglobalaccel(segundos=40):
+    import time
+    fim = time.time() + segundos
+    while time.time() < fim:
+        try:
+            if bus.name_has_owner("org.kde.kglobalaccel"):
+                return True
+        except dbus.DBusException:
+            pass
+        time.sleep(0.5)
+    return False
+
+
+def sessao(cedo):
+    """Aplica a escolha do ambiente desta sessão. --cedo: antes do KWin, só o kwinrc (sem D-Bus)."""
+    global QUIET
+    QUIET = True
+    amb = ambiente()
+    modo = modo_desejado(amb)
+    trava = travar()
+    texto = {"off": T("off", "desligado"), "lowpan": T("on", "ligado"),
+             "krohnkite": T("on (Krohnkite settings)", "ligado (ajustes do Krohnkite)")}[modo]
+    if cedo:
+        # Antes do KWin: o kwinrc já do jeito do ambiente, para o KWin subir sem o Krohnkite/center-new-windows junto
+        # com o motor (LowPan), sem o motor ativo (Plasma) ou com o perfil do Krohnkite (Plasma de quem o usava).
+        if os.path.exists(ENGINE_DST):
+            marcar_painel(modo != "off")
+            if modo != "krohnkite":
+                kk_off(cedo=True)
+            st = load_state()
+            if modo == "lowpan":
+                if st is None:
+                    st = first_state()
+                    st["parcial"] = True
+                for group, key, _v in KWINRC:
+                    st["kwinrc"].setdefault(group + "/" + key, kread(group, key))
+                save_state(st)
+                for group, key, value in KWINRC:
+                    kwrite(group, key, value)
+            else:
+                kwrite("Script-lowpan-tiling", "lowpanActive", "false")
+                for name, value in (st or {}).get("kwinrc", {}).items():
+                    group, key = name.split("/", 1)
+                    if key in ("lowpanActive", "lowpan-tilingEnabled") or is_corner_key(name):
+                        continue
+                    if key == "krohnkiteEnabled" and kk_guardado():
+                        continue
+                    kwrite(group, key, value)
+                if modo == "krohnkite":
+                    kk_on(cedo=True)
+        print("%s: tiling %s" % (amb, texto))
+        return 0
+    if not esperar_kglobalaccel():
+        print(T("kglobalaccel did not show up; nothing changed", "o kglobalaccel não apareceu; nada mudou"), file=sys.stderr)
+        return 1
+    rc = ir_para(modo)
+    if modo == "off":
+        marcar_painel(False)
+    print("%s: tiling %s" % (amb, texto))
+    del trava
+    return rc
+
+
+def status():
+    st = load_state()
+    active = kread("Script-lowpan-tiling", "lowpanActive") != "false" and kread("Plugins", "lowpan-tilingEnabled") == "true"
+    print("tiling: %s%s" % (T("on", "ligado") if active and st else T("off", "desligado"), T("  (originals saved)", "  (original guardado)") if st else ""))
+    print(T("session: %s · LowPan: %s · Plasma: %s", "sessão: %s · LowPan: %s · Plasma: %s") % (
+        ambiente(), *(T("on", "ligado") if preferencia(a) else T("off", "desligado") for a in ("iris", "plasma"))))
+    print(T("engine: %s, loaded: %s", "motor: %s, carregado: %s") % (T("installed", "instalado") if os.path.exists(ENGINE_DST) else T("not installed", "não instalado"),
+                                         T("yes", "sim") if script_loaded("lowpan-tiling") else T("no", "não")))
+    kk = kk_load()
+    if kk:
+        print(T("Krohnkite profile (Plasma): %d settings, %d keys · %s", "perfil do Krohnkite (Plasma): %d ajustes, %d teclas · %s") % (
+            len(kk.get("config", {})), len(kk.get("teclas", {})),
+            T("active", "ativo") if kk.get("ativo") else T("put away", "guardado")))
+    for act, text, keys in KEYMAP:
+        now = keys_of("kwin", act)
+        print("  %-3s %-26s %s" % ("✓" if now else "-", ", ".join(t for t, _ in keys), text))
+    if st:
+        for k in st.get("shortcuts", {}):
+            print(T("  saved: %s", "  guardado: %s") % k.replace("\t", " / "))
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    keep = "--keep-config" in argv
+    if cmd in ("on", "off"):
+        on = cmd == "on"
+        trava = travar()   # o painel (vigia do kwinrc) espera este terminar para ler o estado
+        aqui = ambiente()
+        alvo = argv[argv.index("--ambiente") + 1] if "--ambiente" in argv and argv.index("--ambiente") + 1 < len(argv) else aqui
+        if alvo not in ("iris", "plasma"):
+            print(T(USAGE_EN, __doc__), file=sys.stderr)
+            return 2
+        if alvo == aqui:
+            modo = ("krohnkite" if aqui == "plasma" and (kk_load() or {}).get("config") else "lowpan") if on else "off"
+            rc = ir_para(modo)
+            if not on and load_state() is None and not kk_ativo():
+                marcar_painel(False)
+        else:
+            rc = 0
+            if on:
+                motor_pronto()
+            print(T("%s: tiling %s (applies on the next %s login)", "%s: tiling %s (vale no próximo login do %s)") % (
+                alvo, T("on", "ligado") if on else T("off", "desligado"), "LowPan" if alvo == "iris" else "Plasma"))
+        if rc == 0 and not keep:
+            gravar_preferencia(alvo, on)
+        return rc
+    if cmd == "krohnkite" and len(argv) > 1 and argv[1] in ("capturar", "restaurar", "mostrar"):
+        trava = travar()
+        if argv[1] == "capturar":
+            return kk_capturar()
+        if argv[1] == "restaurar":
+            return kk_restaurar()
+        print(json.dumps(kk_ler(), indent=2, ensure_ascii=False))
+        return 0
+    if cmd == "sessao":
+        return sessao("--cedo" in argv)
+    if cmd == "painel":
+        return painel()
+    if cmd == "status":
+        status()
+        return 0
+    if cmd in ("corners", "opacity", "buttons") and len(argv) > 1 and argv[1] in ("on", "off"):
+        return visual(cmd, argv[1] == "on")
+    print(T(USAGE_EN, __doc__), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,428 @@
+// Copyright (c) 2018-2019 Eon S. Jeon <esjeon@hyunmu.am>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+type percentType = number;
+
+const Shortcut = {
+  FocusNext: 1,
+  FocusPrev: 2,
+  DWMLeft: 3,
+  DWMRight: 4,
+
+  // Left,
+  // Right,
+  // Up,
+  // Down,
+
+  /* Alternate HJKL bindings */
+  FocusUp: 5,
+  FocusDown: 6,
+  FocusLeft: 7,
+  FocusRight: 8,
+
+  ShiftLeft: 9,
+  ShiftRight: 10,
+  ShiftUp: 11,
+  ShiftDown: 12,
+
+  SwapUp: 13,
+  SwapDown: 14,
+  SwapLeft: 15,
+  SwapRight: 16,
+
+  GrowWidth: 17,
+  GrowHeight: 18,
+  ShrinkWidth: 19,
+  ShrinkHeight: 20,
+
+  Increase: 21,
+  Decrease: 22,
+  ShiftIncrease: 22,
+  ShiftDecrease: 23,
+
+  ToggleFloat: 24,
+  ToggleFloatAll: 25,
+  SetMaster: 26,
+  NextLayout: 27,
+  PreviousLayout: 28,
+  SetLayout: 29,
+
+  Rotate: 30,
+  RotatePart: 31,
+
+  ToggleDock: 32,
+  // LowPan Tiling: ações do Niri
+  NiriConsumeLeft: 33,
+  NiriConsumeRight: 34,
+  NiriCycleWidth: 35,
+  NiriMaximizeColumn: 36,
+  NiriCenterColumn: 37,
+  NiriToggleTabbed: 38,
+  NiriResetHeight: 39,
+  NiriFocusFirst: 40,
+  NiriFocusLast: 41,
+  NiriMoveToFirst: 42,
+  NiriMoveToLast: 43,
+  NiriFocusFloating: 44,
+  NiriExpandColumn: 45,
+  NiriPresetOff: 46,
+  NiriPresetMasterLeft: 47,
+  NiriPresetMasterRight: 48,
+  NiriPresetColumns: 49,
+  NiriPresetMonocle: 50,
+  NiriPresetCycle: 51,
+  NiriPresetPromote: 52,
+  // LowPan Tiling: vários monitores (teclas do iNiR: Mod+Ctrl+←/→ e Mod+Ctrl+Shift+←/→)
+  NiriFocusMonitorLeft: 53,
+  NiriFocusMonitorRight: 54,
+  NiriMoveColumnToMonitorLeft: 55,
+  NiriMoveColumnToMonitorRight: 56,
+} as const;
+type Shortcut = (typeof Shortcut)[keyof typeof Shortcut];
+
+const ShortcutsKeys = Object.keys(Shortcut);
+
+interface IShortcuts {
+  getToggleDock(): ShortcutHandler;
+  getNiriConsumeLeft(): ShortcutHandler;
+  getNiriConsumeRight(): ShortcutHandler;
+  getNiriCycleWidth(): ShortcutHandler;
+  getNiriMaximizeColumn(): ShortcutHandler;
+  getNiriCenterColumn(): ShortcutHandler;
+  getNiriToggleTabbed(): ShortcutHandler;
+  getNiriResetHeight(): ShortcutHandler;
+  getNiriFocusFirst(): ShortcutHandler;
+  getNiriFocusLast(): ShortcutHandler;
+  getNiriMoveToFirst(): ShortcutHandler;
+  getNiriMoveToLast(): ShortcutHandler;
+  getNiriFocusFloating(): ShortcutHandler;
+  getNiriExpandColumn(): ShortcutHandler;
+  getNiriPresetOff(): ShortcutHandler;
+  getNiriPresetMasterLeft(): ShortcutHandler;
+  getNiriPresetMasterRight(): ShortcutHandler;
+  getNiriPresetColumns(): ShortcutHandler;
+  getNiriPresetMonocle(): ShortcutHandler;
+  getNiriPresetCycle(): ShortcutHandler;
+  getNiriPresetPromote(): ShortcutHandler;
+  getNiriFocusMonitorLeft(): ShortcutHandler;
+  getNiriFocusMonitorRight(): ShortcutHandler;
+  getNiriMoveColumnToMonitorLeft(): ShortcutHandler;
+  getNiriMoveColumnToMonitorRight(): ShortcutHandler;
+
+  getFocusNext(): ShortcutHandler;
+  getFocusPrev(): ShortcutHandler;
+
+  getFocusUp(): ShortcutHandler;
+  getFocusDown(): ShortcutHandler;
+  getFocusLeft(): ShortcutHandler;
+  getFocusRight(): ShortcutHandler;
+
+  getShiftDown(): ShortcutHandler;
+  getShiftUp(): ShortcutHandler;
+  getShiftLeft(): ShortcutHandler;
+  getShiftRight(): ShortcutHandler;
+
+  getGrowHeight(): ShortcutHandler;
+  getShrinkHeight(): ShortcutHandler;
+  getShrinkWidth(): ShortcutHandler;
+  getGrowWidth(): ShortcutHandler;
+
+  getIncrease(): ShortcutHandler;
+  getDecrease(): ShortcutHandler;
+
+  getToggleFloat(): ShortcutHandler;
+  getFloatAll(): ShortcutHandler;
+  getNextLayout(): ShortcutHandler;
+  getPreviousLayout(): ShortcutHandler;
+
+  getRotate(): ShortcutHandler;
+  getRotatePart(): ShortcutHandler;
+
+  getSetMaster(): ShortcutHandler;
+
+  getTileLayout(): ShortcutHandler;
+  getMonocleLayout(): ShortcutHandler;
+  getThreeColumnLayout(): ShortcutHandler;
+  getSpreadLayout(): ShortcutHandler;
+  getStairLayout(): ShortcutHandler;
+  getFloatingLayout(): ShortcutHandler;
+  getQuarterLayout(): ShortcutHandler;
+  getStackedLayout(): ShortcutHandler;
+  getColumnsLayout(): ShortcutHandler;
+  getSpiralLayout(): ShortcutHandler;
+  getBTreeLayout(): ShortcutHandler;
+}
+
+//#region Driver
+
+interface IConfig {
+  // dock parameters
+  dockOrder: [number, number, number, number];
+  dockHHeight: number;
+  dockHWide: number;
+  dockHGap: number;
+  dockHEdgeGap: number;
+  dockHAlignment: number;
+  dockHEdgeAlignment: number;
+  dockVHeight: number;
+  dockVWide: number;
+  dockVGap: number;
+  dockVEdgeGap: number;
+  dockVAlignment: number;
+  dockVEdgeAlignment: number;
+  dockSurfacesConfig: string[];
+  dockWindowClassConfig: string[];
+
+  //#region Layout
+  layoutOrder: string[];
+  layoutFactories: { [key: string]: () => ILayout };
+  tileLayoutInitialAngle: string;
+  quarterLayoutReset: boolean;
+  columnsLayoutInitialAngle: string;
+  columnsBalanced: boolean;
+  columnsLayerConf: string[];
+  monocleMaximize: boolean;
+  soleWindowWidth: number;
+  soleWindowHeight: number;
+  soleWindowNoBorders: boolean;
+  soleWindowNoGaps: boolean;
+  //#endregion
+
+  //#region Features
+  adjustLayout: boolean;
+  adjustLayoutLive: boolean;
+  floatedWindowsLayer: WindowLayer;
+  tiledWindowsLayer: WindowLayer;
+  keepTilingOnDrag: boolean;
+  noTileBorder: boolean;
+  notificationDuration: number;
+  limitTileWidthRatio: number;
+  //#endregion
+
+  //#region Gap
+  screenGapBottom: number;
+  screenGapLeft: number;
+  screenGapRight: number;
+  screenGapTop: number;
+  screenGapBetween: number;
+  gapsOverrideConfig: string[];
+  //#endregion
+
+  //#region Behavior
+  directionalKeyMode: "dwm" | "focus";
+  newWindowPosition: number;
+  //#endregion
+  screenDefaultLayout: string[];
+  floatSkipPager: boolean;
+}
+
+interface IDriverWindow {
+  readonly fullScreen: boolean;
+  readonly geometry: Readonly<Rect>;
+  readonly id: string;
+  readonly windowClassName: string;
+  readonly maximized: boolean;
+  readonly minimized: boolean;
+  readonly shouldIgnore: boolean;
+  readonly shouldFloat: boolean;
+  /** LowPan Tiling: app na lista "sempre flutuar" / janela principal dele (lembra o tamanho) */
+  readonly lpFloatApp: boolean;
+  readonly lpRememberFloat: boolean;
+  readonly minSize: ISize;
+  readonly maxSize: ISize;
+
+  surface: ISurface;
+
+  commit(geometry?: Rect, noBorder?: boolean, windowLayer?: WindowLayer): void;
+  visible(srf: ISurface): boolean;
+}
+
+interface ISurface {
+  readonly id: string;
+  readonly ignore: boolean;
+  readonly workingArea: Readonly<Rect>;
+
+  readonly output: Output;
+  readonly activity: string;
+  readonly desktop: VirtualDesktop;
+
+  next(): ISurface | null;
+  getParams(): [string, string, string];
+}
+
+interface IDriverContext {
+  readonly backend: string;
+  readonly screens: ISurface[];
+  readonly cursorPosition: [number, number] | null;
+
+  currentSurface: ISurface;
+  currentWindow: WindowClass | null;
+
+  setTimeout(func: () => void, timeout: number): void;
+  showNotification(text: string): void;
+}
+
+interface ILayoutClass {
+  readonly id: string;
+  new (): ILayout;
+}
+
+interface ILayout {
+  /* read-only */
+  readonly capacity?: number;
+  readonly description: string;
+
+  /* methods */
+  adjust?(
+    area: Rect,
+    tiles: WindowClass[],
+    basis: WindowClass,
+    delta: RectDelta,
+    gap: number
+  ): void;
+  apply(
+    ctx: EngineContext,
+    tileables: WindowClass[],
+    area: Rect,
+    gap: number
+  ): void;
+  handleShortcut?(ctx: EngineContext, input: Shortcut, data?: any): boolean;
+  drag?(
+    ctx: EngineContext,
+    draggingRect: Rect,
+    window: WindowClass,
+    workingArea: Rect
+  ): boolean;
+
+  toString(): string;
+}
+
+interface IGaps {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  between: number;
+}
+
+interface ISize {
+  width: number;
+  height: number;
+}
+
+// Logging
+const LogModules = {
+  newWindowAdded: 1,
+  newWindowFiltered: 2,
+  newWindowUnmanaged: 3,
+  screensChanged: 4,
+  virtualScreenGeometryChanged: 5,
+  currentActivityChanged: 6,
+  currentDesktopChanged: 7,
+  windowAdded: 8,
+  windowActivated: 9,
+  windowRemoved: 10,
+  activitiesChanged: 11,
+  bufferGeometryChanged: 12,
+  desktopsChanged: 13,
+  fullScreenChanged: 14,
+  interactiveMoveResizeStepped: 15,
+  maximizedAboutToChange: 16,
+  minimizedChanged: 17,
+  moveResizedChanged: 18,
+  outputChanged: 19,
+  shortcut: 20,
+  arrangeScreen: 21,
+  printConfig: 22,
+  setTimeout: 23,
+  window: 24,
+};
+type LogModule = (typeof LogModules)[keyof typeof LogModules];
+
+const LogModulesKeys = Object.keys(LogModules);
+
+const LogPartitions = {
+  newWindow: {
+    number: 100,
+    name: "newWindow",
+    modules: [
+      LogModules.newWindowAdded,
+      LogModules.newWindowFiltered,
+      LogModules.newWindowUnmanaged,
+    ],
+  },
+  workspaceSignals: {
+    number: 200,
+    name: "workspaceSignal",
+    modules: [
+      LogModules.screensChanged,
+      LogModules.virtualScreenGeometryChanged,
+      LogModules.currentActivityChanged,
+      LogModules.currentDesktopChanged,
+      LogModules.windowAdded,
+      LogModules.windowActivated,
+      LogModules.windowRemoved,
+    ],
+  },
+  windowSignals: {
+    number: 300,
+    name: "windowSignal",
+    modules: [
+      LogModules.activitiesChanged,
+      LogModules.bufferGeometryChanged,
+      LogModules.desktopsChanged,
+      LogModules.fullScreenChanged,
+      LogModules.interactiveMoveResizeStepped,
+      LogModules.maximizedAboutToChange,
+      LogModules.minimizedChanged,
+      LogModules.moveResizedChanged,
+      LogModules.outputChanged,
+    ],
+  },
+  other: {
+    number: 1000,
+    name: "other",
+    modules: [
+      LogModules.shortcut,
+      LogModules.arrangeScreen,
+      LogModules.printConfig,
+      LogModules.setTimeout,
+      LogModules.window,
+    ],
+  },
+} as const;
+type LogPartition = (typeof LogPartitions)[keyof typeof LogPartitions];
+
+interface ILogModules {
+  send(
+    module?: LogModule,
+    action?: string,
+    message?: string,
+    filters?: ILogFilters
+  ): void;
+}
+
+interface ILogFilters {
+  winClass?: string[] | null;
+}
+
+// Globals
+let CONFIG: IConfig;
+let LOG: ILogModules | undefined;

@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+# LowPan Shells: tema do sistema por PERFIL de ambiente — o LowPan Shells (iRiS) e o Plasma do KDE
+# não compartilham cores, ícones, cursor, fontes, decoração, Kvantum nem GTK. O Dolphin inteiro e o
+# esquema de cores escolhido por aplicativo também ficam separados por perfil.
+#
+# Perfis: "own" (iRiS) e "plasma". Na troca, o perfil que está valendo é GUARDADO como está
+# (inclusive o que o usuário mudou nas Configurações do KDE) e o outro é ESCRITO de volta. Só mexe em
+# trechos de tema (lista abaixo), copiando linhas e arquivos — nada de `kwriteconfig6 --delete`
+# (grava `chave[$d]`, que esconde o kdedefaults) nem das ferramentas que acordam o kded gtkconfig
+# (que regrava o GTK e tira o menu global), exceto o cursor.
+#
+# Uso:
+#   lowpan-theme-profile switch own|plasma   guarda o perfil atual e escreve o outro de volta
+#   lowpan-theme-profile status              perfil valendo ("own" ou "plasma")
+# PLANEJAMENTO §21.54, §21.64.
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+DATA = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state"))
+STATE_DIR = STATE / "lowpan-shells"
+PROFILES = STATE_DIR / "theme-profiles"
+LIVE = STATE_DIR / "theme-profile-live"
+CACHE_LOWPAN = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "lowpan-shells"
+NAMES = ("own", "plasma")
+NO_LIVE = os.environ.get("LOWPAN_THEME_NO_LIVE") == "1"
+
+# ---- o que é "tema" (por arquivo INI): grupos inteiros (regex) e chaves soltas
+INI = {
+    "kdeglobals": {
+        "groups": [r"Colors:.*", r"ColorEffects:.*", r"WM", r"Icons", r"Sounds"],
+        "keys": {
+            "General": ["ColorScheme", "ColorSchemeHash", "AccentColor", "LastUsedCustomAccentColor",
+                        "accentColorFromWallpaper", "font", "fixed", "menuFont", "smallestReadableFont",
+                        "toolBarFont"],
+            "KDE": ["widgetStyle"],
+        },
+    },
+    # ButtonsOnLeft/Right ficam fora: são do tiling (barra de título sem botões enquanto ligado), que desde 2026-11-22
+    # é por ambiente — com os perfis guardando a barra escondida, o Plasma com o tiling desligado ficava sem botões
+    "kwinrc": {"groups": [r"org\.kde\.kdecoration2"], "keys": {},
+               "skip": {"org.kde.kdecoration2": ["ButtonsOnLeft", "ButtonsOnRight"]}},
+    "kcminputrc": {"groups": [], "keys": {"Mouse": ["cursorTheme", "cursorSize"]}},
+}
+for app in ("konsolerc", "katerc", "kdenliverc"):
+    INI[app] = {"groups": [], "keys": {"UiSettings": ["ColorScheme"]}}
+LEGACY_INI = ("kdeglobals", "kwinrc", "kcminputrc")
+# ---- arquivos/pastas inteiros (relativos a ~/.config, ou ~ com "~/")
+LEGACY_FILES = [
+    "gtk-3.0/settings.ini", "gtk-3.0/colors.css", "gtk-3.0/gtk.css", "gtk-3.0/window_decorations.css",
+    "gtk-3.0/assets", "gtk-3.0/windows-assets",
+    "gtk-4.0/settings.ini", "gtk-4.0/colors.css", "gtk-4.0/gtk.css", "gtk-4.0/window_decorations.css",
+    "gtk-4.0/assets", "gtk-4.0/windows-assets",
+    "xsettingsd/xsettingsd.conf", "Kvantum/kvantum.kvconfig", "~/.gtkrc-2.0",
+]
+FILES = LEGACY_FILES + [
+    "dolphinrc", "~/.local/state/dolphinstaterc", "~/.local/share/dolphin",
+    "~/.local/share/kxmlgui5/dolphin",
+]
+GSETTINGS = [
+    ("org.gnome.desktop.interface", "gtk-theme"), ("org.gnome.desktop.interface", "icon-theme"),
+    ("org.gnome.desktop.interface", "cursor-theme"), ("org.gnome.desktop.interface", "cursor-size"),
+    ("org.gnome.desktop.interface", "font-name"), ("org.gnome.desktop.interface", "document-font-name"),
+    ("org.gnome.desktop.interface", "color-scheme"), ("org.gnome.desktop.sound", "theme-name"),
+    ("org.gnome.desktop.wm.preferences", "button-layout"),
+]
+
+def log(msg):
+    print(f"[lowpan-theme-profile] {msg}", file=sys.stderr)
+
+
+def run(cmd, **kw):
+    return subprocess.run(cmd, check=False, capture_output=True, text=True, **kw)
+
+
+# ================================================================ INI cru (preserva o resto)
+def ini_parse(text):
+    """[(cabeçalho ou None, [linhas])] — cabeçalho sem os colchetes externos."""
+    blocks = [[None, []]]
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]") and not s.startswith("[$"):
+            blocks.append([s[1:-1], []])
+        else:
+            blocks[-1][1].append(line)
+    return blocks
+
+
+def ini_dump(blocks):
+    out = []
+    for head, lines in blocks:
+        while lines and not lines[-1].strip():
+            lines = lines[:-1]
+        if head is None:
+            if lines:
+                out.extend(lines + [""])
+            continue
+        out.append(f"[{head}]")
+        out.extend(lines)
+        out.append("")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def key_of(line):
+    s = line.strip()
+    if not s or s.startswith("#") or "=" not in s and "[$d]" not in s:
+        return None
+    k = s.split("=", 1)[0]
+    return k.split("[", 1)[0].strip()
+
+
+def ini_capture(path, spec):
+    try:
+        blocks = ini_parse(path.read_text(errors="replace"))
+    except OSError:
+        blocks = []
+    groups = {}
+    for head, lines in blocks:
+        if head and any(re.fullmatch(rx, head) for rx in spec["groups"]):
+            skip = spec.get("skip", {}).get(head, [])
+            groups[head] = [l for l in lines if key_of(l) not in skip]
+    keys = {}
+    for group, names in spec["keys"].items():
+        lines = next((ls for h, ls in blocks if h == group), [])
+        for name in names:
+            keys[f"{group}\x1f{name}"] = [l for l in lines if key_of(l) == name]
+    return {"groups": groups, "keys": keys}
+
+
+def ini_write(path, spec, data):
+    try:
+        blocks = ini_parse(path.read_text(errors="replace"))
+    except OSError:
+        blocks = [[None, []]]
+    # grupos inteiros: tira os que são "tema" e põe os do perfil; as chaves de "skip" ficam como estão no arquivo
+    # (e as que perfis antigos guardaram são ignoradas)
+    skip = spec.get("skip", {})
+    manter = {b[0]: [l for l in b[1] if key_of(l) in skip.get(b[0], [])] for b in blocks if b[0] in skip}
+    blocks = [b for b in blocks if not (b[0] and any(re.fullmatch(rx, b[0]) for rx in spec["groups"]))]
+    for head, lines in data["groups"].items():
+        blocks.append([head, [l for l in lines if key_of(l) not in skip.get(head, [])] + manter.pop(head, [])])
+    for head, lines in manter.items():
+        if lines:
+            blocks.append([head, lines])
+    # chaves soltas
+    for gk, lines in data["keys"].items():
+        group, name = gk.split("\x1f")
+        block = next((b for b in blocks if b[0] == group), None)
+        if block is None:
+            if not lines:
+                continue
+            block = [group, []]
+            blocks.append(block)
+        block[1] = [l for l in block[1] if key_of(l) != name] + list(lines)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(ini_dump(blocks))
+
+
+def ini_set(data, group, key, value):
+    data["keys"][f"{group}\x1f{key}"] = [f"{key}={value}"]
+
+
+# ================================================================ perfis
+def fpath(rel):
+    if rel.startswith("~/.local/state/"):
+        return STATE / rel[len("~/.local/state/"):]
+    if rel.startswith("~/.local/share/"):
+        return DATA / rel[len("~/.local/share/"):]
+    return HOME / rel[2:] if rel.startswith("~/") else CONFIG / rel
+
+
+def gs_get(schema, key, profile):
+    if NO_LIVE:
+        try:
+            return json.loads((PROFILES / profile / "gsettings.json").read_text()).get(f"{schema} {key}")
+        except (OSError, ValueError):
+            return None
+    r = run(["gsettings", "get", schema, key])
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def gs_set(schema, key, value):
+    if value is not None:
+        run(["gsettings", "set", schema, key, value])
+
+
+def capture(name):
+    d = PROFILES / name
+    tmp = PROFILES / f".{name}.tmp"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    (tmp / "files").mkdir(parents=True)
+    ini = {f: ini_capture(CONFIG / f, spec) for f, spec in INI.items()}
+    (tmp / "ini.json").write_text(json.dumps(ini, ensure_ascii=False, indent=1))
+    (tmp / "tracked.json").write_text(json.dumps({"files": FILES, "ini": list(INI)}))
+    present = []
+    for rel in FILES:
+        src = fpath(rel)
+        if src.is_dir():
+            shutil.copytree(src, tmp / "files" / rel.replace("~/", "HOME/"), symlinks=True)
+            present.append(rel)
+        elif src.is_file():
+            dst = tmp / "files" / rel.replace("~/", "HOME/")
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            present.append(rel)
+    (tmp / "files.json").write_text(json.dumps(present))
+    (tmp / "gsettings.json").write_text(
+        json.dumps({f"{s} {k}": gs_get(s, k, name) for s, k in GSETTINGS}))
+    if d.exists():
+        shutil.rmtree(d)
+    tmp.rename(d)
+
+
+def load(name):
+    d = PROFILES / name
+    tracked = (json.loads((d / "tracked.json").read_text()) if (d / "tracked.json").is_file()
+               else {"files": LEGACY_FILES, "ini": list(LEGACY_INI)})
+    return {
+        "ini": json.loads((d / "ini.json").read_text()),
+        "files": json.loads((d / "files.json").read_text()),
+        "gs": json.loads((d / "gsettings.json").read_text()),
+        "tracked": tracked,
+        "dir": d,
+    }
+
+
+def write_files(prof):
+    for rel in FILES:
+        if rel not in prof["tracked"]["files"]:
+            continue
+        dst = fpath(rel)
+        if dst.is_dir() and not dst.is_symlink():
+            shutil.rmtree(dst)
+        elif dst.exists() or dst.is_symlink():
+            dst.unlink()
+        if rel in prof["files"]:
+            src = prof["dir"] / "files" / rel.replace("~/", "HOME/")
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if src.is_dir():
+                shutil.copytree(src, dst, symlinks=True)
+            else:
+                shutil.copy2(src, dst)
+
+
+def eff_value(prof, file, group, key):
+    lines = prof["ini"][file]["keys"].get(f"{group}\x1f{key}") or []
+    for l in lines:
+        if "=" in l:
+            return l.split("=", 1)[1].strip()
+    # sem a chave no arquivo do usuário → o que o KDE usa (kdedefaults)
+    v = run(["kreadconfig6", "--file", str(CONFIG / "kdedefaults" / file), "--group", group, "--key", key])
+    return v.stdout.strip() or None
+
+
+def mark_cursor_pending(path, value="lowpan-pendente"):
+    """Troca (ou cria) o cursorTheme do [Mouse] por `value` (padrão: um nome que não existe), editando por linhas."""
+    lines = path.read_text().splitlines() if path.exists() else []
+    out, in_mouse, done = [], False, False
+    for l in lines:
+        s = l.strip()
+        if s.startswith("["):
+            if in_mouse and not done:
+                out.append(f"cursorTheme={value}")
+                done = True
+            in_mouse = s == "[Mouse]"
+        elif in_mouse and s.startswith("cursorTheme="):
+            l, done = f"cursorTheme={value}", True
+        out.append(l)
+    if not done:
+        if not in_mouse:
+            out += ["", "[Mouse]"]
+        out.append(f"cursorTheme={value}")
+    path.write_text("\n".join(out) + "\n")
+
+
+def write_profile(prof):
+    for f, spec in INI.items():
+        if f in prof["tracked"]["ini"]:
+            ini_write(CONFIG / f, spec, prof["ini"][f])
+    ensure_icon_map()  # o shell troca os ícones já (antes da espera do cursor)
+    # cursor: o KWin só relê pelo plasma-apply-cursortheme (que acorda o gtkconfig — por isso o GTK
+    # vem DEPOIS, com folga para ele terminar). Ele compara com o kcminputrc: se o arquivo já tiver o
+    # tema novo, diz "já está definido" e não aplica nada; e ignora o --size (usa o cursorSize do
+    # arquivo). Então: perfil gravado (com o tamanho), tema marcado como pendente, e aí aplica (2026-11-11).
+    cursor = eff_value(prof, "kcminputrc", "Mouse", "cursorTheme")
+    # LOWPAN_THEME_NO_CURSOR=1: no login, antes do KWin (system/lowpan-theme-login.service) — não há tela para o
+    # comando; o KWin sobe lendo o kcminputrc já gravado. Se o comando falhar, o nome volta (nunca fica "pendente").
+    if not NO_LIVE and cursor and os.environ.get("LOWPAN_THEME_NO_CURSOR") != "1":
+        mark_cursor_pending(CONFIG / "kcminputrc")
+        if run(["plasma-apply-cursortheme", cursor]).returncode != 0:
+            mark_cursor_pending(CONFIG / "kcminputrc", cursor)
+        time.sleep(1.5)
+    write_files(prof)
+    if not NO_LIVE:
+        for sk, v in prof["gs"].items():
+            s, k = sk.split(" ", 1)
+            gs_set(s, k, v)
+        run(["pkill", "-HUP", "-x", "xsettingsd"])
+        # avisos: paleta, fontes, estilo, ícones; e o KWin (decoração)
+        for t in ("0", "1", "2", "4"):
+            run(["dbus-send", "--session", "--type=signal", "/KGlobalSettings",
+                 "org.kde.KGlobalSettings.notifyChange", f"int32:{t}", "int32:0"])
+        run(["dbus-send", "--session", "--type=signal", "/KIconLoader",
+             "org.kde.KIconLoader.iconChanged", "int32:0"])
+        run(["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"])
+
+
+# ================================================================ mapa de ícones para o shell
+ICON_MAP = CACHE_LOWPAN / "icon-map.json"
+
+
+def live_icon_theme():
+    for f in (CONFIG / "kdeglobals", CONFIG / "kdedefaults" / "kdeglobals"):
+        try:
+            blocks = ini_parse(f.read_text(errors="replace"))
+        except OSError:
+            continue
+        for head, lines in blocks:
+            if head == "Icons":
+                for l in lines:
+                    if key_of(l) == "Theme" and "=" in l:
+                        return l.split("=", 1)[1].strip()
+    return "breeze"
+
+
+def ensure_icon_map():
+    """O shell mostra os ícones pelo mapa do tema que está valendo (services/IconMap.qml)."""
+    theme = live_icon_theme()
+    try:
+        if json.loads(ICON_MAP.read_text()).get("theme") == theme:
+            return
+    except (OSError, ValueError):
+        pass
+    # um mapa guardado por tema (gerar leva ~1 s); refeito se a pasta do tema mudou depois dele
+    cached = CACHE_LOWPAN / "icon-maps" / f"{theme}.json"
+    dirs = [d for d in (DATA / "icons" / theme, HOME / ".icons" / theme, Path("/usr/share/icons") / theme) if d.is_dir()]
+    stale = not cached.is_file() or any(d.stat().st_mtime > cached.stat().st_mtime for d in dirs)
+    if stale:
+        run([str(Path(__file__).resolve().parent / "lowpan-icon-map"), theme, str(cached)])
+    if cached.is_file():
+        tmp = ICON_MAP.with_suffix(".tmp")
+        shutil.copyfile(cached, tmp)
+        os.replace(tmp, ICON_MAP)
+
+
+# ================================================================ troca
+def live():
+    try:
+        v = LIVE.read_text().strip()
+        return v if v in NAMES else "own"
+    except OSError:
+        return "own"
+
+
+def switch(target):
+    if target not in NAMES:
+        raise SystemExit(f"perfil: {', '.join(NAMES)}")
+    # uma troca por vez: duas juntas (ex.: shell velho e novo durante um reinício) guardavam um perfil com o
+    # conteúdo do outro (§21.54)
+    import fcntl
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    lock = open(STATE_DIR / "theme-profile.lock", "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    cur = live()
+    if cur == target:
+        ensure_icon_map()
+        return 0
+    PROFILES.mkdir(parents=True, exist_ok=True)
+    capture(cur)  # guarda o que está valendo, com o que o usuário mudou
+    if not (PROFILES / target / "ini.json").is_file():
+        if target == "plasma" and (PROFILES / "own" / "ini.json").is_file():
+            # o perfil do Plasma nasce cópia do own na 1ª troca (§21.64)
+            shutil.copytree(PROFILES / "own", PROFILES / target)
+            log("perfil plasma criado como cópia do own")
+        else:
+            log(f"perfil {target} não existe; nada trocado")
+            return 1
+    write_profile(load(target))
+    LIVE.write_text(target + "\n")
+    ensure_icon_map()
+    log(f"{cur} → {target}")
+    return 0
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "switch" and len(argv) > 1:
+        return switch(argv[1])
+    if cmd == "status":
+        print(live())
+        return 0
+    raise SystemExit("uso: switch own|plasma | status")
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

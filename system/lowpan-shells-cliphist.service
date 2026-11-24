@@ -1,0 +1,17 @@
+[Unit]
+Description=LowPan Shells — histórico da área de transferência (cliphist)
+Documentation=https://github.com/LowPam/lowpan-shells
+# Só junto com o LowPan Shells: no Plasma normal quem guarda o histórico é o Klipper (dentro do plasmashell).
+PartOf=lowpan-shells.service
+After=lowpan-shells.service
+
+[Service]
+# KWin 6.8 oferece ext_data_control_v1, que o wl-paste 2.3 usa sem abrir janela (não rouba foco).
+# Texto e imagem em vigias separadas, como o cliphist recomenda.
+ExecStart=/bin/sh -c 'wl-paste --type text --watch cliphist store & wl-paste --type image --watch cliphist store & wait'
+Restart=on-failure
+RestartSec=2
+Slice=session.slice
+
+[Install]
+WantedBy=lowpan-shells.service

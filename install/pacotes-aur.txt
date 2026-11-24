@@ -1,0 +1,9 @@
+# LowPan Shells — pacotes do AUR (precisa yay ou paru; sem helper o instalador lista e segue).
+# Fontes do LowPan (§21.112): saíram do AUR em 2026-11-22 — vão no projeto (system/fonts, OFL), ligadas pelo 60-aparencia.
+# O otf-space-grotesk (pacote base 38c3-styles) baixava 31 MB e compilava com fontforge + html2markdown (Go): era o
+# passo mais lento da instalação e deixava ~/.config/go para trás.
+# ttf-roboto-flex ttf-readex-pro ttf-gabarito-git otf-space-grotesk ttf-oxanium
+# Cantos de 16 px das janelas no KWin (§21.23). Quebra a cada atualização do kwin: lowpan-efeitos-kwin avisa.
+# kwin-effect-rounded-corners-git   — sai do AUR em 2026-11-22: o nosso é o lowpan-kwin-rounded-corners, compilado de extras/
+#                                     (nomes próprios, convive com o da pessoa), ver 10-pacotes
+# Magic Lamp NÃO entra por aqui: o instalador compila de extras/magic-lamp-reloaded com o patch do LowPan (§21.108).

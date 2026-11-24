@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=LowPan Shells
+Comment=Switch back to the LowPan Shells shell
+Comment[pt_BR]=Voltar para o shell do LowPan Shells
+Exec=sh -c "\\$HOME/.local/bin/lowpan-shells-switch try"
+Icon=applications-system
+Categories=System;

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# LowPan Shells — esconde os esquemas de cores Kv*.colors que o pacote kvantum põe em /usr/share/color-schemes.
+# São ~31 esquemas que ninguém usa direto (os temas Kvantum ficam em /usr/share/Kvantum e continuam valendo),
+# e deixam o menu "Esquema de cores da janela" dos apps do KDE mais alto que a tela: no Wayland o topo da lista
+# ("Padrão", "Breeze Classic") fica inalcançável (PLANEJAMENTO §21.59, §19.2).
+#
+#   sudo lowpan-hide-kvantum-colors apply    NoExtract no pacman.conf (as atualizações não trazem de volta) + apaga
+#   sudo lowpan-hide-kvantum-colors undo     tira o NoExtract e reinstala o kvantum (os arquivos voltam)
+#   lowpan-hide-kvantum-colors status        mostra se estão escondidos
+#   --raiz DIR  (em qualquer subcomando) prefixa os caminhos com DIR, não pede root e não chama o pacman:
+#               só para testar numa pasta temporária (install.sh --raiz-sistema, §22.10 E4)
+set -euo pipefail
+
+RAIZ=""; CMD=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --raiz) RAIZ="${2:?--raiz precisa de uma pasta}"; RAIZ="${RAIZ%/}"; shift 2 ;;
+        *) CMD="$1"; shift ;;
+    esac
+done
+CONF="$RAIZ/etc/pacman.conf"
+DIR="$RAIZ/usr/share/color-schemes"
+HOMES="$RAIZ/home"
+LINE="NoExtract = usr/share/color-schemes/Kv*.colors"
+MARK="# LowPan Shells: esquemas Kv* escondidos (lowpan-hide-kvantum-colors)"
+
+need_root() { [[ -n "$RAIZ" || $EUID -eq 0 ]] || { echo "rode com sudo" >&2; exit 1; }; }
+
+case "${CMD:-status}" in
+apply)
+    need_root
+    if ! grep -qxF "$LINE" "$CONF"; then
+        cp -a "$CONF" "$CONF.lowpan-bak"
+        # logo depois do cabeçalho [options], por linha (não mexe no resto do arquivo)
+        awk -v m="$MARK" -v l="$LINE" '{print} !done && $0=="[options]" {print m; print l; done=1}' \
+            "$CONF.lowpan-bak" > "$CONF.lowpan-tmp"
+        cat "$CONF.lowpan-tmp" > "$CONF" && rm -f "$CONF.lowpan-tmp"
+    fi
+    # avisa (e não apaga) se algum esquema Kv* estiver em uso nos kdeglobals de algum usuário
+    if grep -qs '^ColorScheme=Kv' "$HOMES"/*/.config/kdeglobals; then
+        echo "aviso: há um esquema Kv* em uso no kdeglobals; os arquivos não foram apagados" >&2
+        exit 1
+    fi
+    rm -f "$DIR"/Kv*.colors
+    echo "esquemas Kv* escondidos (backup do pacman.conf em $CONF.lowpan-bak)"
+    ;;
+undo)
+    need_root
+    sed -i "\|^$(printf '%s' "$MARK" | sed 's/[.*[]/\\&/g')\$|d; \|^NoExtract = usr/share/color-schemes/Kv\*\.colors\$|d" "$CONF"
+    if [[ -n "$RAIZ" ]]; then echo "  [simulado] pacman -S --noconfirm kvantum"; else pacman -S --noconfirm kvantum; fi
+    echo "esquemas Kv* de volta"
+    ;;
+status)
+    n=$(compgen -G "$DIR/Kv*.colors" | wc -l || true)
+    if grep -qxF "$LINE" "$CONF"; then echo "NoExtract: sim; arquivos Kv* presentes: $n"
+    else echo "NoExtract: não; arquivos Kv* presentes: $n"; fi
+    ;;
+*)
+    echo "uso: $0 apply|undo|status" >&2; exit 2 ;;
+esac

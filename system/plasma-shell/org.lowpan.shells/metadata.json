@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Shell",
+    "KPlugin": {
+        "Authors": [ { "Name": "LowPan Shells" } ],
+        "Description": "LowPan Shells lock screen, in the style of the LowPan login screen. Only the lockscreen folder lives here.",
+        "Description[pt_BR]": "Tela de bloqueio do LowPan Shells, no estilo da tela de login do LowPan. Só a pasta lockscreen fica aqui.",
+        "Id": "org.lowpan.shells",
+        "License": "GPL-2.0-or-later",
+        "Name": "LowPan Shells (lock screen)",
+        "Name[pt_BR]": "LowPan Shells (tela de bloqueio)"
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell",
+    "X-Plasma-APIVersion": "2"
+}

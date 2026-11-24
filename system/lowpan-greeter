@@ -1,0 +1,327 @@
+#!/usr/bin/env bash
+# LowPan Shells — tela de login do LowPan (greetd + Quickshell), §21.72.
+#
+#   sudo lowpan-greeter instalar   copia a tela, as sessões LowPan/Plasma, o lançador, o config do greetd e o PAM
+#                                  (KWallet). NÃO troca o gerenciador de login.
+#   sudo lowpan-greeter ativar     greetd no lugar do Plasma Login (vale no próximo boot)
+#   sudo lowpan-greeter desfazer   volta ao gerenciador de login de antes e restaura os backups do greetd/PAM
+#                                  (--tudo: apaga também a tela, o lançador e as sessões; usado pelo install.sh)
+#   sudo lowpan-greeter sessoes    só as sessões "LowPan" e "Plasma" (para quem mantém o gerenciador de login atual, ex.
+#                                  SDDM: elas aparecem no menu de sessões dele). Sem greetd, tela nem PAM.
+#   lowpan-greeter status          mostra o que está instalado/ativo
+#   pkexec lowpan-greeter papel    copia o papel de parede atual do LowPan do usuário para a tela de login
+#                                  (§21.97; botão em Configurações › Tela de login; o usuário vem do PKEXEC_UID/SUDO_USER)
+#
+#   --raiz DIR   (em qualquer subcomando) prefixa todos os caminhos com DIR e não chama systemctl/pacman nem
+#                chown: só para testar o script numa pasta temporária.
+#
+# Emergência (tela de login quebrada): Ctrl+Alt+F3, entre no terminal e rode
+#   sudo /usr/lib/lowpan-greeter/lowpan-greeter desfazer && sudo reboot
+set -euo pipefail
+
+RAIZ=""
+CMD=""
+TUDO=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --raiz) RAIZ="${2:?--raiz precisa de uma pasta}"; RAIZ="${RAIZ%/}"; shift 2 ;;
+        instalar|ativar|desfazer|status|papel|sessoes) CMD="$1"; shift ;;
+        --tudo) TUDO=1; shift ;;
+        *) echo "uso: $(basename "$0") instalar|ativar|desfazer [--tudo]|status|papel [--raiz DIR]" >&2; exit 2 ;;
+    esac
+done
+[[ -n "$CMD" ]] || CMD=status
+SIMULAR=0; [[ -n "$RAIZ" ]] && SIMULAR=1
+
+ESTE="$(readlink -f "${BASH_SOURCE[0]}")"
+PROJETO="$(cd "$(dirname "$ESTE")/.." && pwd)"
+
+R() { printf '%s%s' "$RAIZ" "$1"; }   # caminho real (com a raiz de teste)
+LIB=/usr/lib/lowpan-greeter
+TELA=/usr/share/lowpan-greeter
+DADOS=/var/lib/lowpan-greeter
+ETC=/etc/lowpan-greeter
+GREETD_TOML=/etc/greetd/config.toml
+PAM=/etc/pam.d/greetd
+SESSOES=/usr/share/wayland-sessions
+BAK=".lowpan-bak"
+
+msg() { printf '%s\n' "$*"; }
+sistema() {   # comandos que mexem no sistema: em --raiz só mostra
+    if [[ $SIMULAR == 1 ]]; then msg "  [simulado] $*"; else "$@"; fi
+}
+precisa_root() {
+    [[ $SIMULAR == 1 || $EUID -eq 0 ]] && return 0
+    msg "Precisa de root: sudo $ESTE $CMD"; exit 1
+}
+
+# ── PAM: as duas linhas do KWallet, sem duplicar ────────────────────────────
+pam_tem_kwallet() { grep -Eq '^[[:space:]]*-?auth[[:space:]].*pam_kwallet5\.so' "$1" && grep -Eq '^[[:space:]]*-?session[[:space:]].*pam_kwallet5\.so' "$1"; }
+pam_acrescentar_kwallet() {
+    local arq="$1" tmp
+    tmp="$(mktemp)"
+    # Insere depois da última linha "auth" e da última "session" (editando por linhas, sem reescrever o resto).
+    awk '
+        { linhas[NR] = $0 }
+        /^[[:space:]]*-?auth[[:space:]]/    { ultAuth = NR }
+        /^[[:space:]]*-?session[[:space:]]/ { ultSess = NR }
+        /pam_kwallet5\.so/ && /^[[:space:]]*-?auth/    { temAuth = 1 }
+        /pam_kwallet5\.so/ && /^[[:space:]]*-?session/ { temSess = 1 }
+        END {
+            for (i = 1; i <= NR; i++) {
+                print linhas[i]
+                if (i == ultAuth && !temAuth) print "-auth       optional    pam_kwallet5.so"
+                if (i == ultSess && !temSess) print "-session    optional    pam_kwallet5.so auto_start"
+            }
+            if (!ultAuth && !temAuth) print "-auth       optional    pam_kwallet5.so"
+            if (!ultSess && !temSess) print "-session    optional    pam_kwallet5.so auto_start"
+        }' "$arq" > "$tmp"
+    cat "$tmp" > "$arq"
+    rm -f "$tmp"
+}
+
+# ── Papel de parede: o do LowPan do usuário, senão o do Plasma Login ──────────
+papel_do_usuario() {
+    local usuario="$1" casa cfg
+    casa="$(getent passwd "$usuario" | cut -d: -f6)"
+    [[ -n "$RAIZ" ]] && casa="$(R "$casa")"
+    cfg="$casa/.config/illogical-impulse/config.json"
+    [[ -r "$cfg" ]] || return 0
+    # Imprime "caminho<TAB>monitor": o papel do DP-1 (tela principal aqui), senão o 1º por monitor, senão o geral.
+    python3 - "$cfg" 2>/dev/null <<'PY' || true
+import json, sys
+fundo = json.load(open(sys.argv[1])).get("background", {})
+por_tela = [m for m in fundo.get("wallpapersByMonitor", []) if m.get("path")]
+escolha = next((m for m in por_tela if m.get("monitor") == "DP-1"), por_tela[0] if por_tela else None)
+if escolha:
+    print(escolha["path"] + "\t" + escolha.get("monitor", ""))
+else:
+    print(fundo.get("wallpaperPath", "") + "\t")
+PY
+}
+papel_do_plasmalogin() {
+    local img
+    img="$(sed -n 's|^Image=file://||p' "$(R /etc/plasmalogin.conf)" 2>/dev/null | head -1)"
+    [[ -n "$img" ]] || return 0
+    img="$(R "$img")"
+    if [[ -d "$img" ]]; then   # pacote de papel de parede: a maior imagem de contents/images
+        ls -S "$img"/contents/images/* 2>/dev/null | head -1
+    else
+        printf '%s' "$img"
+    fi
+}
+eh_imagem() { [[ "${1,,}" =~ \.(jpe?g|png|webp|bmp)$ ]]; }
+
+# Copia o papel do usuário (senão o do Plasma Login) para $DADOS; deixa $destino e $tela_principal para quem chamou.
+copiar_papel() {
+    local usuario="$1" papel="" linha=""
+    [[ -n "$usuario" ]] && linha="$(papel_do_usuario "$usuario")"
+    papel="${linha%%$'\t'*}"
+    [[ "$linha" == *$'\t'* ]] && tela_principal="${linha#*$'\t'}"
+    [[ -n "$papel" && -n "$RAIZ" && "$papel" != "$RAIZ"* ]] && papel="$(R "$papel")"
+    if ! { [[ -n "$papel" && -r "$papel" ]] && eh_imagem "$papel"; }; then
+        papel="$(papel_do_plasmalogin)"
+    fi
+    if [[ -n "$papel" && -r "$papel" ]] && eh_imagem "$papel"; then
+        destino="$DADOS/papel-de-parede.${papel##*.}"
+        rm -f "$(R $DADOS)"/papel-de-parede.*
+        install -m 644 "$papel" "$(R "$destino")"
+        msg "  papel de parede: $papel"
+    else
+        msg "  papel de parede: nenhum encontrado (fundo escuro)"
+    fi
+}
+
+cmd_instalar() {
+    precisa_root
+    if [[ $SIMULAR == 0 ]] && ! pacman -Qq greetd >/dev/null 2>&1; then
+        msg "O greetd não está instalado. Rode antes: sudo pacman -S greetd"; exit 1
+    fi
+    [[ -f "$PROJETO/greeter/shell.qml" ]] || { msg "Não achei $PROJETO/greeter/shell.qml (rode a partir do projeto)."; exit 1; }
+    local usuario="${SUDO_USER:-${USER:-}}"
+    [[ "$usuario" == root ]] && usuario=""
+
+    msg "• Tela → $TELA"
+    rm -rf "$(R $TELA)"
+    mkdir -p "$(R $TELA)"
+    cp -rL "$PROJETO/greeter/." "$(R $TELA)/"   # -L: fonts/ é link para shell/assets/fonts
+
+    msg "• Sessões, lançador e este script → $LIB"
+    mkdir -p "$(R $LIB)" "$(R $SESSOES)"
+    install -m 755 "$PROJETO/system/lowpan-sessao-iris" "$PROJETO/system/lowpan-sessao-plasma" "$ESTE" "$(R $LIB)/"
+    install -m 644 "$PROJETO/system/lowpan-iris.desktop" "$PROJETO/system/lowpan-plasma.desktop" "$(R $SESSOES)/"
+
+    local layout variante
+    layout="$(localectl status 2>/dev/null | sed -n 's/.*X11 Layout: *//p' | head -1)"
+    variante="$(localectl status 2>/dev/null | sed -n 's/.*X11 Variant: *//p' | head -1)"
+    # A tela (qs) num arquivo próprio: o --exit-with-session do KWin recebe só um programa.
+    cat > "$(R $LIB)/tela" <<EOF
+#!/bin/sh
+# LowPan Shells (§21.72): a tela de login do LowPan, iniciada pelo KWin do greeter.
+exec /usr/bin/qs -p $TELA/shell.qml
+EOF
+    cat > "$(R $LIB)/iniciar" <<EOF
+#!/bin/sh
+# LowPan Shells (§21.72): lançador do greeter (greetd → KWin só para a tela → qs). Gerado pelo lowpan-greeter.
+export XKB_DEFAULT_LAYOUT="${layout:-us}"
+export XKB_DEFAULT_VARIANT="${variante}"
+export QT_QPA_PLATFORM=wayland
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=KDE
+# Configuração/cache do KWin e do Quickshell do usuário "greeter" ficam na pasta da tela.
+export XDG_CONFIG_HOME=$DADOS/config
+export XDG_CACHE_HOME=$DADOS/cache
+export XDG_STATE_HOME=$DADOS/state
+export XDG_DATA_HOME=$DADOS/data
+exec dbus-run-session /usr/bin/kwin_wayland --no-lockscreen --no-global-shortcuts --no-kactivities \\
+    --exit-with-session $LIB/tela
+EOF
+    chmod 755 "$(R $LIB)/tela" "$(R $LIB)/iniciar"
+
+    msg "• Dados → $DADOS"
+    mkdir -p "$(R $DADOS)"/{config,cache,state,data}
+    local destino="" tela_principal=""
+    copiar_papel "$usuario"
+    sistema chown -R greeter:greeter "$(R $DADOS)"
+
+    msg "• Configuração → $ETC/config.json"
+    mkdir -p "$(R $ETC)"
+    if [[ ! -f "$(R $ETC)/config.json" ]]; then
+        python3 - "$(R $ETC)/config.json" "$usuario" "$destino" "$DADOS/estado.json" "$tela_principal" <<'PY'
+import json, sys
+caminho, usuario, papel, estado, tela = sys.argv[1:6]
+json.dump({"usuario": usuario, "papelDeParede": papel, "telaPrincipal": tela, "estado": estado},
+          open(caminho, "w"), indent=2, ensure_ascii=False)
+open(caminho, "a").write("\n")
+PY
+    else
+        msg "  já existe; mantido (apague para gerar de novo)"
+    fi
+
+    msg "• greetd → $GREETD_TOML (backup em $GREETD_TOML$BAK)"
+    mkdir -p "$(R /etc/greetd)"
+    if [[ -f "$(R $GREETD_TOML)" && ! -f "$(R $GREETD_TOML)$BAK" ]]; then
+        cp -p "$(R $GREETD_TOML)" "$(R $GREETD_TOML)$BAK"
+    fi
+    cat > "$(R $GREETD_TOML)" <<EOF
+# LowPan Shells (§21.72): tela de login do LowPan. Original em $GREETD_TOML$BAK.
+[terminal]
+vt = 1
+
+[default_session]
+command = "$LIB/iniciar"
+user = "greeter"
+EOF
+
+    msg "• PAM → $PAM (KWallet abre com a senha do login)"
+    if [[ -f "$(R $PAM)" ]]; then
+        [[ -f "$(R $PAM)$BAK" ]] || cp -p "$(R $PAM)" "$(R $PAM)$BAK"
+        if pam_tem_kwallet "$(R $PAM)"; then msg "  já tinha o pam_kwallet5"; else pam_acrescentar_kwallet "$(R $PAM)"; fi
+    else
+        msg "  AVISO: $PAM não existe (o pacote greetd instala esse arquivo)."
+    fi
+
+    msg ""
+    msg "Instalado. O gerenciador de login ainda é o de antes ($(gerenciador_ativo || true)). Para trocar: sudo $LIB/lowpan-greeter ativar (vale no próximo boot)."
+}
+
+# gerenciador de login ativo (o link display-manager.service): plasmalogin, sddm, gdm… (2026-11-21, §22.10 E4: o
+# ativar/desfazer tinham o plasmalogin fixo — numa máquina com SDDM o disable falhava e o set -e parava tudo)
+gerenciador_ativo() {
+    local alvo; alvo="$(readlink "$(R /etc/systemd/system/display-manager.service)" 2>/dev/null || true)"
+    printf '%s' "${alvo##*/}"
+}
+
+cmd_ativar() {
+    precisa_root
+    [[ -x "$(R $LIB)/iniciar" ]] || { msg "Rode 'instalar' antes."; exit 1; }
+    local anterior; anterior="$(gerenciador_ativo)"
+    if [[ "$anterior" == greetd.service ]]; then msg "greetd já é o gerenciador de login."; return 0; fi
+    mkdir -p "$(R $ETC)"
+    [[ -n "$anterior" ]] && printf '%s\n' "$anterior" > "$(R $ETC)/gerenciador-anterior"
+    [[ -n "$anterior" ]] && sistema systemctl disable "$anterior"
+    sistema systemctl enable greetd.service
+    if [[ $SIMULAR == 1 ]]; then ln -sfn /usr/lib/systemd/system/greetd.service "$(R /etc/systemd/system/display-manager.service)"; fi
+    msg "greetd habilitado; ${anterior:-nenhum gerenciador anterior} fica desabilitado. Nada foi reiniciado: vale no próximo boot."
+    msg "Se a tela não aparecer: Ctrl+Alt+F3, login, sudo $LIB/lowpan-greeter desfazer && sudo reboot"
+}
+
+cmd_desfazer() {
+    precisa_root
+    local anterior; anterior="$(cat "$(R $ETC)/gerenciador-anterior" 2>/dev/null || true)"
+    if [[ -z "$anterior" ]]; then
+        # instalado antes de 2026-11-21 (sem o arquivo): o primeiro que existir
+        for u in plasmalogin.service sddm.service; do
+            if [[ $SIMULAR == 1 || -f /usr/lib/systemd/system/$u ]]; then anterior=$u; break; fi
+        done
+    fi
+    if [[ "$(gerenciador_ativo)" == greetd.service ]]; then
+        sistema systemctl disable greetd.service || true
+        [[ -n "$anterior" ]] && sistema systemctl enable "$anterior"
+        if [[ $SIMULAR == 1 && -n "$anterior" ]]; then ln -sfn "/usr/lib/systemd/system/$anterior" "$(R /etc/systemd/system/display-manager.service)"; fi
+    fi
+    if [[ -f "$(R $GREETD_TOML)$BAK" ]]; then mv -f "$(R $GREETD_TOML)$BAK" "$(R $GREETD_TOML)"; msg "• $GREETD_TOML restaurado"; fi
+    if [[ -f "$(R $PAM)$BAK" ]]; then mv -f "$(R $PAM)$BAK" "$(R $PAM)"; msg "• $PAM restaurado"; fi
+    if [[ $TUDO == 1 ]]; then
+        rm -rf "$(R $TELA)" "$(R $LIB)" "$(R $DADOS)" "$(R $ETC)"
+        rm -f "$(R $SESSOES)/lowpan-iris.desktop" "$(R $SESSOES)/lowpan-plasma.desktop"
+        msg "• tela, lançador e sessões apagados"
+        msg "${anterior:-O gerenciador anterior} de volta no próximo boot."
+    else
+        msg "${anterior:-O gerenciador anterior} de volta no próximo boot. Os arquivos em $TELA, $LIB, $DADOS e $ETC ficaram (inofensivos)."
+    fi
+}
+
+# Só as sessões (2026-11-21, §22.10 E5): o marcador de sessão é gravado pela própria sessão e lido pelo
+# lowpan-sessao-login, então funcionam com qualquer gerenciador de login que liste /usr/share/wayland-sessions.
+cmd_sessoes() {
+    precisa_root
+    mkdir -p "$(R $LIB)" "$(R $SESSOES)"
+    install -m 755 "$PROJETO/system/lowpan-sessao-iris" "$PROJETO/system/lowpan-sessao-plasma" "$ESTE" "$(R $LIB)/"
+    install -m 644 "$PROJETO/system/lowpan-iris.desktop" "$PROJETO/system/lowpan-plasma.desktop" "$(R $SESSOES)/"
+    msg "• Sessões LowPan e Plasma → $SESSOES (aparecem no menu de sessões do gerenciador de login atual)"
+}
+
+cmd_status() {
+    local ativo
+    ativo="$(gerenciador_ativo)"
+    msg "gerenciador de login : ${ativo:-nenhum}"
+    msg "greetd instalado     : $([[ $SIMULAR == 1 ]] && echo '(simulado)' || { pacman -Qq greetd >/dev/null 2>&1 && echo sim || echo não; })"
+    # "sim" só com a cópia igual à do projeto (2026-11-23: a sessão renomeada para LowPan não era reinstalada)
+    msg "tela instalada       : $([[ -f "$(R $TELA)/shell.qml" ]] && diff -rq "$PROJETO/greeter" "$(R $TELA)" >/dev/null 2>&1 && echo sim || echo não)"
+    msg "lançador             : $([[ -x "$(R $LIB)/iniciar" ]] && echo sim || echo não)"
+    msg "greetd → tela LowPan : $(grep -q "$LIB/iniciar" "$(R $GREETD_TOML)" 2>/dev/null && echo sim || echo não)"
+    msg "PAM com KWallet      : $([[ -f "$(R $PAM)" ]] && pam_tem_kwallet "$(R $PAM)" && echo sim || echo não)"
+    msg "sessões LowPan/Plasma : $([[ -x "$(R $LIB)/lowpan-sessao-iris" ]] && cmp -s "$PROJETO/system/lowpan-iris.desktop" "$(R $SESSOES)/lowpan-iris.desktop" && cmp -s "$PROJETO/system/lowpan-plasma.desktop" "$(R $SESSOES)/lowpan-plasma.desktop" && echo sim || echo não)"
+}
+
+# §21.97: só o papel de parede (botão das Configurações, via pkexec). Não mexe em greetd/PAM/sessões.
+cmd_papel() {
+    precisa_root
+    [[ -f "$(R $ETC)/config.json" ]] || { msg "Tela de login do LowPan não instalada (rode 'instalar')."; exit 1; }
+    local usuario="" destino="" tela_principal=""
+    if [[ -n "${PKEXEC_UID:-}" ]]; then usuario="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"; fi
+    [[ -n "$usuario" ]] || usuario="${SUDO_USER:-}"
+    [[ -n "$usuario" && "$usuario" != root ]] || { msg "Não sei de qual usuário pegar o papel (rode com pkexec ou sudo)."; exit 1; }
+    copiar_papel "$usuario"
+    [[ -n "$destino" ]] || exit 1
+    sistema chown greeter:greeter "$(R "$destino")"
+    python3 - "$(R $ETC)/config.json" "$destino" <<'PY'
+import json, sys
+caminho, papel = sys.argv[1:3]
+cfg = json.load(open(caminho))
+cfg["papelDeParede"] = papel
+json.dump(cfg, open(caminho, "w"), indent=2, ensure_ascii=False)
+open(caminho, "a").write("\n")
+PY
+    msg "Papel de parede da tela de login atualizado (aparece no próximo login)."
+}
+
+case "$CMD" in
+    instalar) cmd_instalar ;;
+    ativar) cmd_ativar ;;
+    desfazer) cmd_desfazer ;;
+    status) cmd_status ;;
+    papel) cmd_papel ;;
+    sessoes) cmd_sessoes ;;
+esac

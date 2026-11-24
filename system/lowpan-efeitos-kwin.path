@@ -1,0 +1,10 @@
+# LowPan Shells — o kwin foi atualizado (binário trocado) → verifica os efeitos do AUR.
+[Unit]
+Description=LowPan Shells: vigia atualização do kwin
+
+[Path]
+PathChanged=/usr/bin/kwin_wayland
+Unit=lowpan-efeitos-kwin.service
+
+[Install]
+WantedBy=plasma-workspace.target

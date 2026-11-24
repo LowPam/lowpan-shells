@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# LowPan Shells — "pode subir?" conforme o marcador de sessão $XDG_RUNTIME_DIR/lowpan-sessao (§21.72).
+#   lowpan-sessao-e iris    sai 0 se o LowPan (lowpan-shells.service) pode subir sozinho
+#   lowpan-sessao-e plasma  sai 0 se o plasmashell pode subir sozinho
+# Marcador: "iris|plasma [<XDG_SESSION_ID>]"; sem marcador/inválido (login antigo) pode tudo, como antes.
+# Id de outra sessão logind (logout com o diretório sobrevivendo) vale como sem marcador; id vazio aceita.
+set -u
+case "${1:-}" in iris|plasma) ;; *) exit 1 ;; esac
+alvo="$1"
+marcador="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/lowpan-sessao"
+sessao="" id=""
+if [[ -f "$marcador" ]]; then
+    read -r sessao id < "$marcador" || sessao=""
+fi
+case "$sessao" in
+    iris|plasma)
+        if [[ -n "${id:-}" && -n "${XDG_SESSION_ID:-}" && "$id" != "$XDG_SESSION_ID" ]]; then
+            exit 0   # marcador de outra sessão logind: como sem marcador
+        fi
+        [[ "$sessao" == "$alvo" ]]
+        ;;
+    *) exit 0 ;;
+esac

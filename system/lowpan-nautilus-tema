@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# LowPan Shells — monta o Nautilus do LowPan numa máquina nova (PLANEJAMENTO §19.2 linhas 32–46, §22.4 item 3).
+#
+#   lowpan-nautilus-tema instalar [--forcar]   tema + .desktop + serviços D-Bus (idempotente)
+#   lowpan-nautilus-tema css-usuario           acrescenta o bloco do Nautilus em ~/.config/gtk-4.0/gtk.css
+#   lowpan-nautilus-tema desfazer              apaga o que o instalar criou (o MacTahoe só com --tudo)
+#   lowpan-nautilus-tema status
+#
+# O tema LowPanNautilus é uma variação do MacTahoeLiquidKde-Dark (lestercorderomurillo/macos-tahoe-liquid-kde,
+# GPL-3.0). O MacTahoe NÃO vai no projeto: é baixado do autor num commit fixo, só a pasta GTK escura.
+# Do projeto vêm só os arquivos nossos (system/nautilus/tema); base*.css é gerado (sem :backdrop) e sombra.css
+# vem do kwin-decoration.py (a sombra do Breeze das Configurações › Janelas).
+# O pacote nautilus é com o instalador (pacman); este script não instala pacotes.
+set -euo pipefail
+
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in pt*) LP_PT=1 ;; *) LP_PT=0 ;; esac
+t() { if [[ $LP_PT == 1 ]]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+
+PROJETO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+SRC="$PROJETO/system/nautilus"
+REPO_URL="https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde"
+REPO_COMMIT="95e169ec0e6778bb844a23eb80ee45d157260279"  # v0.67.0, o mesmo da §21.53
+REPO_DIR="src/offline/gtk/MacTahoeLiquidKde-Dark"
+
+THEMES="$HOME/.themes"
+MAC="$THEMES/MacTahoeLiquidKde-Dark"
+TEMA="$THEMES/LowPanNautilus"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+APPS="$DATA/applications"
+DBUS="$DATA/dbus-1/services"
+GTK4="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-4.0/gtk.css"
+MARCA="/* LowPan Shells (§19.2 linha 32)"
+
+baixar_mactahoe() {
+    if [[ -f "$MAC/.lowpan-commit" && "$(cat "$MAC/.lowpan-commit")" == "$REPO_COMMIT" && "${1:-}" != --forcar ]]; then
+        echo "$(t "already  MacTahoe ($REPO_COMMIT)" "já está  MacTahoe ($REPO_COMMIT)")"; return
+    fi
+    if [[ -d "$MAC" && ! -f "$MAC/.lowpan-commit" && "${1:-}" != --forcar ]]; then
+        # pasta que não fomos nós que pusemos (ex.: a desta máquina, vinda do pacote Tahoe): usa como está
+        echo "$(t "kept     existing $MAC (use --forcar to replace)" "mantido  $MAC existente (--forcar para trocar)")"; return
+    fi
+    local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+    git -C "$tmp" init -q
+    git -C "$tmp" remote add origin "$REPO_URL"
+    git -C "$tmp" fetch -q --depth 1 --filter=blob:none origin "$REPO_COMMIT"
+    git -C "$tmp" sparse-checkout set --no-cone "/$REPO_DIR/"
+    git -C "$tmp" checkout -q FETCH_HEAD
+    [[ -f "$tmp/$REPO_DIR/gtk-4.0/gtk-dark.css" ]] || { echo "$(t "download incomplete" "download incompleto"): $REPO_DIR" >&2; exit 1; }
+    mkdir -p "$THEMES"
+    rm -rf "$MAC"
+    cp -a "$tmp/$REPO_DIR" "$MAC"
+    echo "$REPO_COMMIT" > "$MAC/.lowpan-commit"
+    echo "ok       MacTahoe ($REPO_COMMIT)"
+}
+
+montar_tema() {
+    mkdir -p "$TEMA/gtk-4.0"
+    cp "$SRC/tema/index.theme" "$SRC/tema/gerar-sem-backdrop.py" "$TEMA/"
+    cp "$SRC/tema/"{gtk.css,gtk-dark.css,animacao.css,cores-breeze.css} "$TEMA/gtk-4.0/"
+    python3 -I "$TEMA/gerar-sem-backdrop.py" >/dev/null
+    # sombra.css a partir do breezerc; sem ele (máquina sem Breeze configurado) fica um arquivo vazio
+    python3 -I "$PROJETO/shell/scripts/kwin-decoration.py" gtk >/dev/null 2>&1 || true
+    [[ -f "$TEMA/gtk-4.0/sombra.css" ]] || : > "$TEMA/gtk-4.0/sombra.css"
+    echo "ok       $TEMA"
+}
+
+escrever_lancadores() {
+    local orig=/usr/share/applications/org.gnome.Nautilus.desktop lanc="$PROJETO/system/lowpan-nautilus"
+    mkdir -p "$APPS" "$DBUS"
+    if [[ -f "$orig" ]]; then
+        # cópia do .desktop do pacote com o Exec no lançador (tema só no LowPan) e sem ativação D-Bus
+        # (por ela a janela nova abriria na pasta pessoal; §19.2 linha 34)
+        sed -e "s|^Exec=nautilus |Exec=\"$lanc\" |" -e "s|^Exec=nautilus$|Exec=\"$lanc\"|" \
+            -e 's|^DBusActivatable=true|DBusActivatable=false|' "$orig" > "$APPS/org.gnome.Nautilus.desktop"
+        echo "ok       $APPS/org.gnome.Nautilus.desktop"
+    else
+        echo "$(t "skipped  .desktop: nautilus not installed" "pulado   .desktop: nautilus não instalado")"
+    fi
+    cat > "$DBUS/org.gnome.Nautilus.service" <<EOF
+# LowPan Shells (§19.2 linha 34): Nautilus com o tema LowPanNautilus no LowPan. Apagar para voltar ao do sistema.
+[D-BUS Service]
+Name=org.gnome.Nautilus
+Exec="$lanc" --gapplication-service
+EOF
+    cat > "$DBUS/org.freedesktop.FileManager1.service" <<EOF
+# LowPan Shells (§19.2 linha 39): "mostrar na pasta" abre o Nautilus com tema no LowPan e o Dolphin no Plasma.
+# Apagar para voltar aos do sistema (nautilus e dolphin brigam pelo mesmo nome).
+[D-BUS Service]
+Name=org.freedesktop.FileManager1
+Exec=$HOME/.local/bin/lowpan-shells-files --dbus
+EOF
+    echo "ok       $DBUS/{org.gnome.Nautilus,org.freedesktop.FileManager1}.service"
+    kbuildsycoca6 >/dev/null 2>&1 || true
+    busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig >/dev/null 2>&1 || true
+}
+
+css_usuario() {
+    mkdir -p "$(dirname "$GTK4")"
+    if [[ -f "$GTK4" ]] && grep -qF "$MARCA" "$GTK4"; then
+        echo "$(t "already  block in $GTK4" "já está  bloco em $GTK4")"; return
+    fi
+    # o arquivo do projeto começa com o @import do colors.css do KDE: só entra se ainda não houver um
+    if [[ -f "$GTK4" ]] && grep -q "@import 'colors.css'" "$GTK4"; then
+        grep -v "^@import 'colors.css';" "$SRC/gtk4-usuario.css" >> "$GTK4"
+    else
+        cat "$SRC/gtk4-usuario.css" >> "$GTK4"
+    fi
+    echo "ok       $(t "block in" "bloco em") $GTK4"
+}
+
+desfazer() {
+    rm -rf "$TEMA"
+    rm -f "$APPS/org.gnome.Nautilus.desktop" "$DBUS/org.gnome.Nautilus.service" "$DBUS/org.freedesktop.FileManager1.service"
+    [[ "${1:-}" == --tudo && -f "$MAC/.lowpan-commit" ]] && rm -rf "$MAC"
+    if [[ -f "$GTK4" ]] && grep -qF "$MARCA" "$GTK4"; then
+        # o bloco vai da marca até o fim do arquivo (é sempre acrescentado no fim)
+        python3 -I - "$GTK4" "$MARCA" <<'EOF'
+import sys
+p, marca = sys.argv[1], sys.argv[2]
+s = open(p).read()
+open(p, "w").write(s[:s.index(marca)].rstrip() + "\n")
+EOF
+    fi
+    kbuildsycoca6 >/dev/null 2>&1 || true
+    busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig >/dev/null 2>&1 || true
+    echo "$(t "removed (the nautilus package stays)" "removido (o pacote nautilus fica)")"
+}
+
+status() {   # sai 1 se faltar algo (install.sh plano)
+    local i falta=0
+    for i in "$MAC/gtk-4.0/gtk-dark.css" "$TEMA/gtk-4.0/base-dark.css" "$TEMA/gtk-4.0/sombra.css" \
+             "$APPS/org.gnome.Nautilus.desktop" "$DBUS/org.gnome.Nautilus.service" "$DBUS/org.freedesktop.FileManager1.service"; do
+        if [[ -e "$i" ]]; then echo "ok       $i"; else echo "$(t "missing" "falta")    $i"; falta=1; fi
+    done
+    if [[ -f "$GTK4" ]] && grep -qF "$MARCA" "$GTK4"; then echo "ok       $GTK4"
+    else echo "$(t "missing" "falta")    $(t "block in" "bloco em") $GTK4"; falta=1; fi
+    return $falta
+}
+
+case "${1:-status}" in
+    instalar) baixar_mactahoe "${2:-}"; montar_tema; escrever_lancadores ;;
+    css-usuario) css_usuario ;;
+    desfazer) desfazer "${2:-}" ;;
+    status) status ;;
+    *) echo "$(t usage uso): $(basename "$0") instalar [--forcar] | css-usuario | desfazer [--tudo] | status" >&2; exit 2 ;;
+esac

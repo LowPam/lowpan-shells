@@ -1,0 +1,11 @@
+# LowPan Shells — a caixa "Tiling ligado neste ambiente" da tela do LowPan Tiling (Scripts do KWin › engrenagem)
+# grava [Script-lowpan-tiling] lowpanToggle no kwinrc; este vigia chama o "lowpan-shells-tiling painel", que liga ou
+# desliga de verdade (teclas, botões, encaixe) e guarda a escolha do ambiente desta sessão. Sem mudança, não faz nada.
+[Unit]
+Description=LowPan Shells: liga/desliga do tiling pela tela do script
+
+[Path]
+PathChanged=%h/.config/kwinrc
+
+[Install]
+WantedBy=default.target

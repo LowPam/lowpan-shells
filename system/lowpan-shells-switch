@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# LowPan Shells — alterna entre o plasmashell e o LowPan Shells.
+#
+#   lowpan-shells-switch try     usa o LowPan Shells AGORA, sem mudar o login (um reboot/logout volta ao Plasma)
+#   lowpan-shells-switch on      LowPan Shells também nos próximos logins (mascara o plasmashell)
+#   lowpan-shells-switch off     volta ao plasmashell (agora e nos próximos logins)
+#   lowpan-shells-switch status  mostra o que está ativo
+#
+# Emergência: Meta+Ctrl+Alt+P chama "off" (via ~/.local/bin/lowpan-voltar-plasma).
+set -euo pipefail
+
+# Idioma das mensagens: o do sistema (inglês por padrão; português em sistema pt), como o shell em "auto"
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in pt*) LP_PT=1 ;; *) LP_PT=0 ;; esac
+t() { if [[ $LP_PT == 1 ]]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+
+PROJECT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+UNIT_SRC="$PROJECT/system/lowpan-shells.service"
+UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+QS_LINK="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/lowpan-shells"
+SC=(systemctl --user)
+# Desinstalado pelo install.sh (2026-11-21): try/on não religam nada; só um `install.sh instalar` novo apaga o aviso.
+DESINSTALADO="${XDG_STATE_HOME:-$HOME/.local/state}/lowpan-shells/install/desinstalado"
+recusar_se_desinstalado() {
+    [[ -f "$DESINSTALADO" ]] || return 0
+    echo "$(t "LowPan Shells was uninstalled (install.sh desinstalar). To use it again: $PROJECT/install.sh instalar" "O LowPan Shells foi desinstalado (install.sh desinstalar). Para usar de novo: $PROJECT/install.sh instalar")" >&2
+    exit 1
+}
+
+# Marcador de sessão do login do LowPan (§21.72): "iris|plasma [<XDG_SESSION_ID>]" em
+# $XDG_RUNTIME_DIR/lowpan-sessao. Sem XDG_RUNTIME_DIR não grava e segue. O id identifica a sessão
+# logind: um marcador deixado por sessão morta não vale no próximo login.
+gravar_marcador() {
+    [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]] || return 0
+    printf '%s %s\n' "$1" "${XDG_SESSION_ID:-}" > "$XDG_RUNTIME_DIR/lowpan-sessao" 2>/dev/null || true
+}
+
+# Imprime "iris"/"plasma" se o marcador é válido para esta sessão logind; nada caso contrário.
+ler_marcador() {
+    [[ -n "${XDG_RUNTIME_DIR:-}" && -f "$XDG_RUNTIME_DIR/lowpan-sessao" ]] || return 0
+    local s id
+    read -r s id < "$XDG_RUNTIME_DIR/lowpan-sessao" || return 0
+    case "$s" in iris|plasma) ;; *) return 0 ;; esac
+    [[ -n "${id:-}" && -n "${XDG_SESSION_ID:-}" && "$id" != "$XDG_SESSION_ID" ]] && return 0
+    printf '%s' "$s"
+}
+
+ensure_installed() {
+    mkdir -p "$UNIT_DIR" "$(dirname "$QS_LINK")"
+    ln -sfn "$UNIT_SRC" "$UNIT_DIR/lowpan-shells.service"
+    [[ -e "$QS_LINK" ]] || ln -sfn "$PROJECT/shell" "$QS_LINK"
+    # Atalho no menu dos aplicativos para voltar ao LowPan a partir do Plasma (§21.64)
+    local apps_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    mkdir -p "$apps_dir"
+    ln -sfn "$PROJECT/system/lowpan-shells-iris.desktop" "$apps_dir/lowpan-shells-iris.desktop"
+    # No login, o Plasma sobe com o perfil de tema dele mesmo se a sessão anterior terminou no LowPan (§21.64)
+    ln -sfn "$PROJECT/system/lowpan-theme-login.service" "$UNIT_DIR/lowpan-theme-login.service"
+    # Marcador de sessão do login (§21.72): com sessão "iris" o plasmashell não sobe sozinho
+    mkdir -p "$UNIT_DIR/plasma-plasmashell.service.d"
+    ln -sfn "$PROJECT/system/plasma-plasmashell-lowpan.conf" "$UNIT_DIR/plasma-plasmashell.service.d/lowpan.conf"
+    # Tiling por ambiente (2026-11-22): aplica a escolha do ambiente depois que o KWin sobe
+    ln -sfn "$PROJECT/system/lowpan-tiling-sessao.service" "$UNIT_DIR/lowpan-tiling-sessao.service"
+    ln -sfn "$PROJECT/system/lowpan-tiling-painel.path" "$UNIT_DIR/lowpan-tiling-painel.path"
+    ln -sfn "$PROJECT/system/lowpan-tiling-painel.service" "$UNIT_DIR/lowpan-tiling-painel.service"
+    "${SC[@]}" daemon-reload
+    "${SC[@]}" -q enable lowpan-theme-login.service 2>/dev/null || true
+    "${SC[@]}" -q enable lowpan-tiling-sessao.service 2>/dev/null || true
+    "${SC[@]}" -q enable --now lowpan-tiling-painel.path 2>/dev/null || true
+}
+
+# LowPan Shells: guarda a área útil que o plasmashell informa (StrutManager). A ponte do shell responde a
+# mesma área ao Yakuake, que só calcula o tamanho ao iniciar: assim ele fica igual nos dois modos.
+AREAS="${XDG_STATE_HOME:-$HOME/.local/state}/lowpan-shells/plasma-areas.json"
+save_plasma_areas() {
+    busctl --user status org.kde.plasmashell 2>/dev/null | grep -q '^Comm=plasmashell' || return 0
+    mkdir -p "$(dirname "$AREAS")"
+    local names out json="{" sep=""
+    names="$(kscreen-doctor -j 2>/dev/null | python3 -c 'import json,sys; print(" ".join(o["name"] for o in json.load(sys.stdin)["outputs"] if o.get("enabled")))' || true)"
+    for n in $names; do
+        out="$(busctl --user call org.kde.plasmashell /StrutManager org.kde.PlasmaShell.StrutManager availableScreenRect s "$n" 2>/dev/null)" || continue
+        read -r _ x y w h <<< "$out"
+        json+="$sep\"$n\": {\"x\": $x, \"y\": $y, \"width\": $w, \"height\": $h}"; sep=", "
+    done
+    [[ -n "$sep" ]] && printf '%s}\n' "$json" > "$AREAS"
+    return 0
+}
+
+# Tiling por ambiente: ao trocar LowPan ↔ Plasma no meio da sessão, aplica a escolha do novo ambiente (em segundo plano:
+# a emergência nunca espera por ele)
+aplicar_tiling() {
+    [[ -x "$PROJECT/system/lowpan-shells-tiling" ]] || return 0
+    # saída no journal (identificador lowpan-shells-tiling), como a do serviço do login
+    ( timeout 60 "$PROJECT/system/lowpan-shells-tiling" sessao 2>&1 | systemd-cat -t lowpan-shells-tiling & ) || true
+    [[ -x "$PROJECT/system/lowpan-cantos-ambiente" ]] && { ( timeout 30 "$PROJECT/system/lowpan-cantos-ambiente" agora >/dev/null 2>&1 & ) || true; }
+}
+
+notify() { command -v notify-send >/dev/null && notify-send -a "LowPan Shells" -i plasma "$1" "${2:-}" || true; }
+
+cmd_try() {
+    recusar_se_desinstalado
+    ensure_installed
+    save_plasma_areas
+    gravar_marcador iris
+    "${SC[@]}" stop plasma-plasmashell.service || true
+    "${SC[@]}" start lowpan-shells.service
+    aplicar_tiling
+    echo "$(t "LowPan Shells active in this session (login still starts Plasma)." "LowPan Shells ativo nesta sessão (o login continua com o Plasma).")"
+}
+
+cmd_on() {
+    recusar_se_desinstalado
+    ensure_installed
+    save_plasma_areas
+    gravar_marcador iris
+    "${SC[@]}" mask plasma-plasmashell.service
+    "${SC[@]}" stop plasma-plasmashell.service || true
+    "${SC[@]}" enable lowpan-shells.service
+    "${SC[@]}" start lowpan-shells.service
+    aplicar_tiling
+    echo "$(t "LowPan Shells active now and on future logins. To go back: lowpan-shells-switch off" "LowPan Shells ativo agora e nos próximos logins. Para voltar: lowpan-shells-switch off")"
+}
+
+cmd_off() {
+    "${SC[@]}" stop lowpan-shells.service 2>/dev/null || true
+    # Sem `disable`: a unit é um link para o projeto (ensure_installed) e o disable apagava o link junto — o login
+    # seguinte pelo LowPan dava "Unit lowpan-shells.service not found" e tela preta (2026-11-15). Só sai a ativação.
+    rm -f "$UNIT_DIR"/*.wants/lowpan-shells.service
+    "${SC[@]}" unmask plasma-plasmashell.service 2>/dev/null || true
+    "${SC[@]}" daemon-reload
+    "${SC[@]}" reset-failed plasma-plasmashell.service 2>/dev/null || true
+    local theme_script="$PROJECT/shell/scripts/lowpan-theme-profile"
+    if [[ -x "$theme_script" ]]; then
+        # com limite: a emergência nunca pode ficar presa na trava do tema
+        timeout 30 "$theme_script" switch plasma || echo "$(t "Could not restore the Plasma theme profile; continuing." "Não foi possível restaurar o perfil de tema do Plasma; continuando.")" >&2
+    else
+        echo "$(t "Theme script not found; continuing without restoring the Plasma theme profile." "Script de tema não encontrado; continuando sem restaurar o perfil de tema do Plasma.")" >&2
+    fi
+    gravar_marcador plasma
+    "${SC[@]}" start plasma-plasmashell.service
+    aplicar_tiling
+    notify "Plasma restaurado" "plasmashell ativo; LowPan Shells desligado"
+    echo "$(t "plasmashell active; LowPan Shells off (also on future logins)." "plasmashell ativo; LowPan Shells desligado (também nos próximos logins).")"
+}
+
+cmd_status() {
+    printf 'plasmashell   : %s (%s)\n' "$("${SC[@]}" is-active plasma-plasmashell.service 2>/dev/null || true)" \
+        "$("${SC[@]}" is-enabled plasma-plasmashell.service 2>/dev/null || true)"
+    printf 'lowpan-shells : %s (%s)\n' "$("${SC[@]}" is-active lowpan-shells.service 2>/dev/null || true)" \
+        "$("${SC[@]}" is-enabled lowpan-shells.service 2>/dev/null || true)"
+    local sessao=""
+    sessao="$(ler_marcador)" || true
+    printf '%s %s\n' "$(t "session marker:" "marcador de sessão:")" "${sessao:-$(t "none" "nenhum")}"
+}
+
+case "${1:-status}" in
+    try) cmd_try ;;
+    on) cmd_on ;;
+    off) cmd_off ;;
+    status) cmd_status ;;
+    *) echo "$(t usage uso): $(basename "$0") try|on|off|status" >&2; exit 2 ;;
+esac
