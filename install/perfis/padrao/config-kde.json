@@ -305,21 +305,6 @@
     "breezerc": [
       [
         "Common",
-        "OutlineEnabled",
-        "true"
-      ],
-      [
-        "Common",
-        "OutlineIntensity",
-        "OutlineMedium"
-      ],
-      [
-        "Common",
-        "RoundedCorners",
-        "true"
-      ],
-      [
-        "Common",
         "ShadowSize",
         "ShadowMedium"
       ],

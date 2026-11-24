@@ -57,6 +57,12 @@ FORA = {
     ("kwinrc", "LowPan-Round-Corners", "Exclusions"),     # a_klista nos módulos 40/70
     ("kwinrc", "Effect-kwin4_effect_squash2", "Targets"),  # posições dos ícones da dock nesta tela (o shell grava)
     ("katerc", "General", "PinnedDocuments"),
+    # contorno e cantos do Breeze (2026-11-24, teste como usuário): no LowPan quem desenha cantos/contorno é o nosso
+    # Rounded Corners, e algo no login regrava estas chaves (false/OutlineOff/false, igual no desktop e na VM) → o
+    # verificar acusava "a fazer" logo depois de instalar (desde a 8ª rodada). OutlineIntensity nem existe no Breeze 6.8.
+    ("breezerc", "Common", "OutlineEnabled"),
+    ("breezerc", "Common", "OutlineIntensity"),
+    ("breezerc", "Common", "RoundedCorners"),
 }
 PLUGINS_FORA = {"lowpan-tilingEnabled", "krohnkiteEnabled", "center-new-windowsEnabled", "lowpan_drag_insetEnabled",
                 "kwin4_effect_geometry_changeEnabled", "kwin4_effect_tvEnabled",   # tiling e 40-kwin
