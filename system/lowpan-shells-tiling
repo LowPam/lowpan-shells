@@ -74,6 +74,19 @@ ENGINE_DST = os.path.join(DATA, "kwin", "scripts", "lowpan-tiling")
 GEOM_ID = "kwin4_effect_geometry_change"
 GEOM_SRC = os.path.join(PROJECT, "shell", "kwin-tiling", "third-party", GEOM_ID)
 GEOM_DST = os.path.join(DATA, "kwin", "effects", GEOM_ID)
+# main.js de versões do Geometry Change que o projeto já instalou (sha256): só essas são atualizadas sozinhas
+GEOM_OLD_SHA256 = {
+    "ae1e227fd975372668658aef06ba242e1003257a6edf4e7adbd632e45052e1f1",   # original até 2026-11-26 (carência de 10 ms)
+}
+
+
+def geom_is_old_ours():
+    import hashlib
+    dst = os.path.join(GEOM_DST, "contents", "code", "main.js")
+    if not os.path.isfile(dst):
+        return False
+    with open(dst, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest() in GEOM_OLD_SHA256
 CORNERS_ID = "kwin4_effect_lowpancorners"  # nosso Rounded Corners (lowpan-kwin-rounded-corners; só usado se instalado)
 RULE_GROUP = "lowpan-tiling-inactive-opacity"  # kwinrulesrc: inativas a 90 % (como no iNiR)
 INSET_ID = "lowpan_drag_inset"  # recuo das outras janelas ao arrastar (efeito próprio, só visual)
@@ -502,6 +515,12 @@ def to_on():
         shutil.copytree(GEOM_SRC, GEOM_DST)
         st["installed"].append(GEOM_DST)
         print(T("Geometry Change effect installed in %s", "instalado o efeito Geometry Change em %s") % GEOM_DST)
+    elif geom_is_old_ours():
+        # cópia nossa de uma versão anterior (hash conhecido): atualiza; uma versão mexida pela pessoa fica como está
+        shutil.rmtree(GEOM_DST)
+        shutil.copytree(GEOM_SRC, GEOM_DST)
+        print(T("Geometry Change effect updated in %s (takes effect on next login)",
+                "atualizado o efeito Geometry Change em %s (vale no próximo login)") % GEOM_DST)
 
     if not os.path.exists(os.path.join(INSET_DST, "metadata.json")) and os.path.exists(INSET_SRC):
         shutil.copytree(INSET_SRC, INSET_DST)

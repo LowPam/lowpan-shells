@@ -16,6 +16,10 @@ class GeometryChangeEffect {
         const duration = effect.readConfig("Duration", 250);
         this.duration = animationTime(duration);
         this.excludedWindowClasses = effect.readConfig("ExcludedWindowClasses", "krunner,yakuake").split(",");
+        // LowPan (2026-11-26): carência das janelas novas. No Wayland o tiling só encaixa a janela depois do 1º quadro
+        // (dezenas de ms, não os 10 ms do original): o encaixe era animado como um deslizar por cima da abertura TV
+        // (visto no Audacity, só sem gravar a tela — gravando, o ritmo muda e a janela já estava no lugar).
+        this.newWindowGraceMs = effect.readConfig("NewWindowGraceMs", 500);
     }
 
     manage(window) {
@@ -70,8 +74,9 @@ class GeometryChangeEffect {
         if (windowAgeMs < 0) {
             // May happen after time zone change. Let's fix the created time, so it's not in the future.
             window.geometryChangeData.createdTime = Date.now();
-        } else if(windowAgeMs < 10) {
+        } else if(windowAgeMs < this.newWindowGraceMs) {
             // Some windows are moved or resized immediately after being created. We don't want to animate that.
+            // (LowPan: era 10 ms; o encaixe do tiling numa janela nova fica para o efeito de abrir.)
             return;
         }
 

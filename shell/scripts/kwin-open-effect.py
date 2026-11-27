@@ -27,7 +27,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "2"
+VERSION = "3"
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
                      "lowpan-shells", "kwin-open-effect")
 QSB_CANDIDATES = ["/usr/lib/qt6/bin/qsb", "/usr/lib64/qt6/bin/qsb", "/usr/libexec/qt6/qsb", "qsb"]
@@ -52,8 +52,7 @@ layout(std140, binding = 0) uniform buf {
   vec2 uSize;
 %MEMBERS%};
 layout(binding = 1) uniform sampler2D source;
-#define uForOpening (uForOpeningF > 0.5)
-#define uIsFullscreen (uIsFullscreenF > 0.5)
+%STDDEFINES%
 #define uPadding 0.0
 #define iTexCoord qt_TexCoord0
 #define texture2D texture
@@ -192,7 +191,16 @@ def build_shader(anim, eid, edir, rc, duration_ms):
             defines.append("#define %s (%sF > 0.5)" % (name, name))
         elif typ == "int":
             defines.append("#define %s int(%sF)" % (name, name))
-    frag = QT_HEADER.replace("%MEMBERS%", "".join(members)).replace("%DEFINES%", "\n".join(defines)) + body
+    # uForOpening/uIsFullscreen: bool no Burn-My-Windows original; float no TV do LowPan (2026-11-26, direção por
+    # animação no KWin) — o macro segue o tipo declarado no cabeçalho do efeito, senão o qsb recusa `bool < float`.
+    std = []
+    for name in ("uForOpening", "uIsFullscreen"):
+        if re.search(r"^\s*uniform\s+float\s+%s\s*;" % name, src, flags=re.M):
+            std.append("#define %s %sF" % (name, name))
+        else:
+            std.append("#define %s (%sF > 0.5)" % (name, name))
+    frag = (QT_HEADER.replace("%STDDEFINES%", "\n".join(std)).replace("%MEMBERS%", "".join(members))
+            .replace("%DEFINES%", "\n".join(defines)) + body)
 
     grp = rc.get("Effect-" + eid, {})
     dflt = defaults_of(edir)

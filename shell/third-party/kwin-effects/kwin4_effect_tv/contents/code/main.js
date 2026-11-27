@@ -25,6 +25,13 @@ const blacklist = [
 
 class BurnMyWindowsTvEffect {
   constructor() {
+    // LowPan (2026-11-26): janelas com animação TV em curso (abertura ou fechamento). Contorno do bug 528239 do
+    // KWin 6.8.3: a foto da janela que o KWin tira no animate() sai VAZIA quando este efeito já está animando outra
+    // janela (CrossFadeEffect::drawWindow pula o desenho com crossFadeProgress 0) — a janela ficava invisível a
+    // animação inteira (Audacity: a janela de carregamento ainda anima quando a principal abre; dois kitty seguidos).
+    // Corrigido no KWin 6.8.4 (commit 7b9bdf3fb3); até lá, com outra animação em curso a janela entra/sai sem efeito.
+    // Ao atualizar o KWin para >= 6.8.4: apagar this.emAnimacao e o teste em slotWindowAdded/slotWindowClosed.
+    this.emAnimacao = new Set();
     effect.configChanged.connect(this.loadConfig.bind(this));
     effect.animationEnded.connect(this.cleanupForcedRoles.bind(this));
     effects.windowAdded.connect(this.slotWindowAdded.bind(this));
@@ -126,6 +133,7 @@ class BurnMyWindowsTvEffect {
   }
 
   cleanupForcedRoles(window) {
+    this.emAnimacao.delete(window);
     window.setData(Effect.WindowForceBackgroundContrastRole, null);
     window.setData(Effect.WindowForceBlurRole, null);
   }
@@ -143,13 +151,20 @@ class BurnMyWindowsTvEffect {
     if (effect.isGrabbed(window, Effect.WindowAddedGrabRole)) {
       return;
     }
+    if (this.emAnimacao.size > 0) {
+      return;
+    }
     this.setupForcedRoles(window);
 
-    effect.setUniform(this.shader, 'uForOpening', 1.0);
-    effect.setUniform(this.shader, 'uIsFullscreen', window.fullScreen ? 1.0 : 0.0);
+    const full = window.fullScreen ? 1.0 : 0.0;
 
 
 
+    // LowPan (2026-11-26): direção e tela cheia vão em cada animação (valor constante), aplicados janela a janela
+    // ao desenhar. Antes eram um setUniform no shader compartilhado: uma janela fechando enquanto outra abria (a
+    // tela de abertura do Audacity sumindo junto da janela principal) trocava a direção e a abertura era desenhada
+    // como fechamento (faixa cinza encolhendo até um ponto) e a janela só aparecia no fim.
+    this.emAnimacao.add(window);
     window.bmwInAnimation = animate({
       window: window,
       curve: QEasingCurve.Linear,
@@ -160,11 +175,30 @@ class BurnMyWindowsTvEffect {
         uniform: 'uProgress',
         from: 0.0,
         to: 1.0
+      }, {
+        type: Effect.ShaderUniform,
+        fragmentShader: this.shader,
+        uniform: 'uForOpening',
+        from: 1.0,
+        to: 1.0
+      }, {
+        type: Effect.ShaderUniform,
+        fragmentShader: this.shader,
+        uniform: 'uIsFullscreen',
+        from: full,
+        to: full
       }]
     });
   }
 
   slotWindowClosed(window) {
+    // LowPan (2026-11-26): a abertura em curso é cancelada antes de qualquer saída antecipada (antes, uma janela
+    // fechada no meio da abertura sem animação de fechamento deixava a abertura rodando sobre a janela destruída).
+    if (window.bmwInAnimation) {
+      cancel(window.bmwInAnimation);
+      delete window.bmwInAnimation;
+      this.cleanupForcedRoles(window);
+    }
     if (effects.hasActiveFullScreenEffect) {
       return;
     }
@@ -177,17 +211,20 @@ class BurnMyWindowsTvEffect {
     if (effect.isGrabbed(window, Effect.WindowClosedGrabRole)) {
       return;
     }
-    if (window.bmwInAnimation) {
-      cancel(window.bmwInAnimation);
-      delete window.bmwInAnimation;
+    if (this.emAnimacao.size > 0) {
+      return;
     }
     this.setupForcedRoles(window);
 
-    effect.setUniform(this.shader, 'uForOpening', 0.0);
-    effect.setUniform(this.shader, 'uIsFullscreen', window.fullScreen ? 1.0 : 0.0);
+    const full = window.fullScreen ? 1.0 : 0.0;
 
 
 
+    // LowPan (2026-11-26): direção e tela cheia vão em cada animação (valor constante), aplicados janela a janela
+    // ao desenhar. Antes eram um setUniform no shader compartilhado: uma janela fechando enquanto outra abria (a
+    // tela de abertura do Audacity sumindo junto da janela principal) trocava a direção e a abertura era desenhada
+    // como fechamento (faixa cinza encolhendo até um ponto) e a janela só aparecia no fim.
+    this.emAnimacao.add(window);
     window.bmwOutAnimation = animate({
       window: window,
       curve: QEasingCurve.Linear,
@@ -198,6 +235,18 @@ class BurnMyWindowsTvEffect {
         uniform: 'uProgress',
         from: 0.0,
         to: 1.0
+      }, {
+        type: Effect.ShaderUniform,
+        fragmentShader: this.shader,
+        uniform: 'uForOpening',
+        from: 0.0,
+        to: 0.0
+      }, {
+        type: Effect.ShaderUniform,
+        fragmentShader: this.shader,
+        uniform: 'uIsFullscreen',
+        from: full,
+        to: full
       }]
     });
   }

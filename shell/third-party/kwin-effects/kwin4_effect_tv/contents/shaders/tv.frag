@@ -39,8 +39,10 @@
 // vec4 getInputColor(vec2 coords)
 // void setOutputColor(vec4 outColor)
 
-uniform bool uForOpening;
-uniform bool uIsFullscreen;
+// LowPan (2026-11-26): float em vez de bool — os dois vão como ShaderUniform por animação (main.js), não mais
+// num setUniform global que uma janela fechando trocava no meio da abertura de outra.
+uniform float uForOpening;
+uniform float uIsFullscreen;
 uniform float uProgress;
 uniform float uDuration;
 
@@ -73,7 +75,7 @@ void setOutputColor(vec4 outColor) {
   // false, but it will prevent the compiler from optimizing away the uniforms uForOpening
   // and uIsFullscreen. On KWin, we need to do this as we do not have a way to check if a
   // uniform is used in the shader.
-  if (outColor.a > 1000.0 && uForOpening && uIsFullscreen) {
+  if (outColor.a > 1000.0 && uForOpening > 0.5 && uIsFullscreen > 0.5) {
     outColor = vec4(0.0);
   }
 
@@ -107,7 +109,7 @@ void setOutputColor(vec4 outColor) {
   // false, but it will prevent the compiler from optimizing away the uniforms uForOpening
   // and uIsFullscreen. On KWin, we need to do this as we do not have a way to check if a
   // uniform is used in the shader.
-  if (outColor.a > 1000.0 && uForOpening && uIsFullscreen) {
+  if (outColor.a > 1000.0 && uForOpening > 0.5 && uIsFullscreen > 0.5) {
     outColor = vec4(0.0);
   }
 
@@ -197,7 +199,7 @@ float easeOutBack(float x, float e) {
 float getEdgeMask(vec2 uv, vec2 maxUV, float fadeWidth) {
   float mask = 1.0;
 
-  if (!uIsFullscreen) {
+  if (uIsFullscreen < 0.5) {
     mask *= smoothstep(0.0, 1.0, clamp(uv.x / fadeWidth, 0.0, 1.0));
     mask *= smoothstep(0.0, 1.0, clamp(uv.y / fadeWidth, 0.0, 1.0));
     mask *= smoothstep(0.0, 1.0, clamp((maxUV.x - uv.x) / fadeWidth, 0.0, 1.0));
@@ -482,7 +484,7 @@ const float FF_TIME    = 0.1;   // Relative time for the final fade to transpare
 const float SCALING    = 0.5;   // Additional vertical scaling of the window.
 
 void main() {
-  float prog = uForOpening ? 1.0 - easeOutQuad(uProgress) : easeOutQuad(uProgress);
+  float prog = uForOpening > 0.5 ? 1.0 - easeOutQuad(uProgress) : easeOutQuad(uProgress);
 
   // Scale down the window vertically.
   float scale = 1.0 / mix(1.0, SCALING, prog) - 1.0;

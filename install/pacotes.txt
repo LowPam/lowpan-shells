@@ -70,6 +70,9 @@ spectacle                # Spectacle: a outra opção de captura (já vem com o 
 
 # --- Nautilus (núcleo, 70-nautilus)
 nautilus
+gvfs-mtp                 # Nautilus: celulares Android (o Dolphin usa o kio-extras; sem isto o aparelho não aparecia)
+gvfs-gphoto2             # Nautilus: câmeras (PTP)
+gvfs-afc                 # Nautilus: iPhone/iPad
 git                      # baixa o GTK do MacTahoe (lowpan-nautilus-tema)
 
 # --- tela de login (pergunta "Tela de login": só com "iris")
